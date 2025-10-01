@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Manga Translator - Options</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: #f5f5f5;
+      padding: 40px 20px;
+    }
+    
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+      overflow: hidden;
+    }
+    
+    .header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 30px;
+    }
+    
+    .header h1 {
+      font-size: 28px;
+      margin-bottom: 10px;
+    }
+    
+    .header p {
+      opacity: 0.9;
+      font-size: 14px;
+    }
+    
+    .content {
+      padding: 30px;
+    }
+    
+    .section {
+      margin-bottom: 30px;
+    }
+    
+    .section-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #333;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #667eea;
+    }
+    
+    .info-box {
+      background: #e7f3ff;
+      border-left: 4px solid #4A90E2;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 4px;
+    }
+    
+    .info-box h3 {
+      font-size: 14px;
+      color: #2c5aa0;
+      margin-bottom: 8px;
+    }
+    
+    .info-box p {
+      font-size: 13px;
+      color: #555;
+      line-height: 1.6;
+    }
+    
+    .info-box ul {
+      margin: 10px 0 0 20px;
+      font-size: 13px;
+      color: #555;
+    }
+    
+    .info-box li {
+      margin-bottom: 5px;
+    }
+    
+    .translator-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+      font-size: 13px;
+    }
+    
+    .translator-table th {
+      background: #f8f9fa;
+      padding: 12px;
+      text-align: left;
+      font-weight: 600;
+      color: #333;
+      border-bottom: 2px solid #dee2e6;
+    }
+    
+    .translator-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid #dee2e6;
+    }
+    
+    .translator-table tr:hover {
+      background: #f8f9fa;
+    }
+    
+    .badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    
+    .badge-offline {
+      background: #d4edda;
+      color: #155724;
+    }
+    
+    .badge-api {
+      background: #fff3cd;
+      color: #856404;
+    }
+    
+    .code {
+      background: #f4f4f4;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      color: #e83e8c;
+    }
+    
+    .setup-steps {
+      background: #fff9e6;
+      border-left: 4px solid #ffc107;
+      padding: 15px;
+      margin: 15px 0;
+      border-radius: 4px;
+    }
+    
+    .setup-steps h4 {
+      color: #856404;
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
+    
+    .setup-steps ol {
+      margin-left: 20px;
+      color: #666;
+      font-size: 13px;
+      line-height: 1.8;
+    }
+    
+    .command-box {
+      background: #2d2d2d;
+      color: #f8f8f2;
+      padding: 15px;
+      border-radius: 6px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      overflow-x: auto;
+      margin: 10px 0;
+    }
+    
+    .command-box code {
+      color: #a6e22e;
+    }
+    
+    .warning {
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+      color: #856404;
+      padding: 12px;
+      border-radius: 4px;
+      margin: 15px 0;
+      font-size: 13px;
+    }
+    
+    .footer {
+      background: #f8f9fa;
+      padding: 20px 30px;
+      text-align: center;
+      color: #666;
+      font-size: 13px;
+    }
+    
+    .footer a {
+      color: #667eea;
+      text-decoration: none;
+      font-weight: 600;
+    }
+    
+    .footer a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🎌 Manga Image Translator</h1>
+      <p>Configuration Guide & Translator Reference</p>
+    </div>
+    
+    <div class="content">
+      <div class="section">
+        <div class="section-title">📋 How to Use</div>
+        <div class="info-box">
+          <h3>Three Ways to Translate Images:</h3>
+          <ul>
+            <li><strong>Right-click:</strong> Right-click on any manga image and select "Translate Manga Image"</li>
+            <li><strong>Hover button:</strong> Hover over large images to see a translate button (🌐)</li>
+            <li><strong>Keyboard shortcut:</strong> Hover over an image and press <strong>Alt+T</strong></li>
+          </ul>
+        </div>
+      </div>
+      
+      <div class="section">
+        <div class="section-title">⚙️ Backend Setup</div>
+        <div class="setup-steps">
+          <h4>Step 1: Install manga-image-translator</h4>
+          <ol>
+            <li>Make sure you have Python 3.10+ installed</li>
+            <li>Clone the repository and install dependencies</li>
+          </ol>
+        </div>
+        
+        <div class="command-box">
+          <code>git clone https://github.com/zyddnys/manga-image-translator.git</code><br>
+          <code>cd manga-image-translator</code><br>
+          <code>pip install -r requirements.txt</code>
+        </div>
+        
+        <div class="setup-steps">
+          <h4>Step 2: Start the Web Server</h4>
+          <ol>
+            <li>Navigate to server directory:</li>
+          </ol>
+        </div>
+        
+        <div class="command-box">
+          <code>cd server</code><br>
+          <code>python main.py --use-gpu</code>
+        </div>
+        
+        <div class="warning">
+          ⚠️ <strong>Note:</strong> Models will be automatically downloaded on first use (~several GB). Make sure you have enough disk space.
+        </div>
+      </div>
+      
+      <div class="section">
+        <div class="section-title">🌐 Translator Reference</div>
+        
+        <div class="info-box">
+          <h3>Offline Translators (Recommended for Privacy)</h3>
+          <p>These translators work completely offline and don't require API keys. They're perfect for privacy-conscious users and work without internet connection once models are downloaded.</p>
+        </div>
+        
+        <table class="translator-table">
+          <thead>
+            <tr>
+              <th>Translator</th>
+              <th>Type</th>
+              <th>Best For</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>offline</strong></td>
+              <td><span class="badge badge-offline">Offline</span></td>
+              <td>Auto-select best offline translator</td>
+              <td>Automatically chooses based on language pair</td>
+            </tr>
+            <tr>
+              <td><strong>sugoi</strong></td>
+              <td><span class="badge badge-offline">Offline</span></td>
+              <td>Japanese → English</td>
+              <td>Sugoi V4.0 model, excellent quality</td>
+            </tr>
+            <tr>
+              <td><strong>nllb / nllb_big</strong></td>
+              <td><span class="badge badge-offline">Offline</span></td>
+              <td>Multi-language support</td>
+              <td>Supports 200+ languages</td>
+            </tr>
+            <tr>
+              <td><strong>jparacrawl / jparacrawl_big</strong></td>
+              <td><span class="badge badge-offline">Offline</span></td>
+              <td>Japanese translation</td>
+              <td>Specialized for Japanese</td>
+            </tr>
+            <tr>
+              <td><strong>m2m100 / m2m100_big</strong></td>
+              <td><span class="badge badge-offline">Offline</span></td>
+              <td>Multilingual translation</td>
+              <td>Many-to-many translation model</td>
+            </tr>
+            <tr>
+              <td><strong>mbart50</strong></td>
+              <td><span class="badge badge-offline">Offline</span></td>
+              <td>50 languages</td>
+              <td>Good for diverse language pairs</td>
+            </tr>
+            <tr>
+              <td><strong>qwen2 / qwen2_big</strong></td>
+              <td><span class="badge badge-offline">Offline</span></td>
+              <td>High-quality translation</td>
+              <td>Latest Qwen model</td>
+            </tr>
+          </tbody>
+        </table>
+        
+        <div class="info-box" style="margin-top: 30px;">
+          <h3>Online Translators (API Key Required)</h3>
+          <p>These translators require API keys and internet connection but often provide higher quality translations.</p>
+        </div>
+        
+        <table class="translator-table">
+          <thead>
+            <tr>
+              <th>Translator</th>
+              <th>Type</th>
+              <th>Environment Variable</th>
+              <th>Setup</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>chatgpt</strong></td>
+              <td><span class="badge badge-api">API</span></td>
+              <td><span class="code">OPENAI_API_KEY</span></td>
+              <td>Get key from <a href="https://platform.openai.com" target="_blank">OpenAI</a></td>
+            </tr>
+            <tr>
+              <td><strong>deepl</strong></td>
+              <td><span class="badge badge-api">API</span></td>
+              <td><span class="code">DEEPL_AUTH_KEY</span></td>
+              <td>Get key from <a href="https://www.deepl.com/pro-api" target="_blank">DeepL</a></td>
+            </tr>
+            <tr>
+              <td><strong>gemini</strong></td>
+              <td><span class="badge badge-api">API</span></td>
+              <td><span class="code">GEMINI_API_KEY</span></td>
+              <td>Get key from <a href="https://makersuite.google.com/app/apikey" target="_blank">Google AI Studio</a></td>
+            </tr>
+            <tr>
+              <td><strong>deepseek</strong></td>
+              <td><span class="badge badge-api">API</span></td>
+              <td><span class="code">DEEPSEEK_API_KEY</span></td>
+              <td>Get key from <a href="https://platform.deepseek.com" target="_blank">DeepSeek</a></td>
+            </tr>
+            <tr>
+              <td><strong>groq</strong></td>
+              <td><span class="badge badge-api">API</span></td>
+              <td><span class="code">GROQ_API_KEY</span></td>
+              <td>Get key from <a href="https://console.groq.com" target="_blank">Groq</a></td>
+            </tr>
+            <tr>
+              <td><strong>baidu</strong></td>
+              <td><span class="badge badge-api">API</span></td>
+              <td><span class="code">BAIDU_APP_ID</span>, <span class="code">BAIDU_SECRET_KEY</span></td>
+              <td>Get from Baidu Translate API</td>
+            </tr>
+            <tr>
+              <td><strong>youdao</strong></td>
+              <td><span class="badge badge-api">API</span></td>
+              <td><span class="code">YOUDAO_APP_KEY</span>, <span class="code">YOUDAO_SECRET_KEY</span></td>
+              <td>Get from Youdao API</td>
+            </tr>
+          </tbody>
+        </table>
+        
+        <div class="setup-steps" style="margin-top: 20px;">
+          <h4>Setting API Keys</h4>
+          <ol>
+            <li>Create a <span class="code">.env</span> file in the manga-image-translator directory</li>
+            <li>Add your API keys in the format:</li>
+          </ol>
+        </div>
+        
+        <div class="command-box">
+          <code>OPENAI_API_KEY=sk-your-key-here</code><br>
+          <code>DEEPL_AUTH_KEY=your-key-here</code><br>
+          <code>GEMINI_API_KEY=your-key-here</code>
+        </div>
+      </div>
+      
+      <div class="section">
+        <div class="section-title">🎨 Advanced Settings</div>
+        
+        <div class="info-box">
+          <h3>Text Detector Options</h3>
+          <ul>
+            <li><strong>default:</strong> Best overall performance</li>
+            <li><strong>ctd:</strong> Can detect more text lines (experimental)</li>
+            <li><strong>craft:</strong> Good for general text (not recommended for manga)</li>
+          </ul>
+        </div>
+        
+        <div class="info-box">
+          <h3>Inpainter Options</h3>
+          <ul>
+            <li><strong>lama_large:</strong> Best quality for removing text (recommended)</li>
+            <li><strong>lama_mpe:</strong> Faster alternative</li>
+            <li><strong>sd:</strong> Stable Diffusion based (slow but high quality)</li>
+          </ul>
+        </div>
+        
+        <div class="info-box">
+          <h3>Renderer Options</h3>
+          <ul>
+            <li><strong>default:</strong> Standard text rendering</li>
+            <li><strong>manga2eng:</strong> Better for fitting English text in bubbles</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    
+    <div class="footer">
+      <p>
+        Backend: <a href="https://github.com/zyddnys/manga-image-translator" target="_blank">manga-image-translator</a> by zyddnys<br>
+        For more information, visit the <a href="https://github.com/zyddnys/manga-image-translator" target="_blank">official repository</a>
+      </p>
+    </div>
+  </div>
+</body>
+</html>
