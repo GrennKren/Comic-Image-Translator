@@ -9,6 +9,8 @@ let currentSelector = '[name="image-item"] img';
 let translationQueue = new Set();
 let isProcessing = false;
 let pageChangeObserver = null;
+let cacheProcessingQueue = [];
+let isCacheProcessing = false;
 
 // Load settings on page load
 browser.runtime.sendMessage({ action: 'getSettings' }).then(response => {
@@ -44,7 +46,6 @@ browser.runtime.sendMessage({ action: 'getSettings' }).then(response => {
 function setupFeatures() {
   console.log('Setting up features with settings:', settings);
   
-  // Clean up existing observers
   if (imageObserver) {
     imageObserver.disconnect();
     imageObserver = null;
@@ -55,24 +56,58 @@ function setupFeatures() {
     pageChangeObserver = null;
   }
   
-  // Setup auto-translation if enabled
+  // Preload cache for existing images
+  if (settings.enableCache && settings.customSelector) {
+    preloadCacheForExistingImages();
+  }
+  
   if (settings.enableBatchMode && settings.customSelector) {
     currentSelector = settings.customSelector;
     startAutoTranslation();
   } else {
-    // Use default selector
     startAutoTranslation();
   }
   
-  // Setup enhanced observer for manga sites
   if (settings.observeDynamicImages) {
     setupEnhancedImageObserver();
     setupPageChangeObserver();
   }
   
-  // Initialize hover buttons for existing images
   if (!settings.customSelector || !settings.enableBatchMode) {
     initializeHoverButtons();
+  }
+}
+
+// New function to preload cache
+function preloadCacheForExistingImages() {
+  if (!currentSelector) {
+    currentSelector = settings.customSelector || '[name="image-item"] img';
+  }
+  
+  try {
+    const images = document.querySelectorAll(currentSelector);
+    if (images.length === 0) return;
+    
+    const imageArray = Array.from(images)
+      .filter(img => img.src && img.src.startsWith('http'))
+      .filter(img => img.naturalWidth > 100 && img.naturalHeight > 100)
+      .filter(img => img.dataset.miProcessed !== 'true');
+    
+    if (imageArray.length > 0) {
+      console.log(`Found ${imageArray.length} images for cache application`);
+      
+      // Apply cache in background, don't wait
+      imageArray.forEach(img => {
+        const elementInfo = getElementInfo(img);
+        browser.runtime.sendMessage({
+          action: 'applyCacheOnly',
+          imageUrl: img.src,
+          imageElement: elementInfo
+        }).catch(() => {});
+      });
+    }
+  } catch (error) {
+    console.error('Error preloading cache:', error);
   }
 }
 
@@ -80,44 +115,32 @@ function setupFeatures() {
 function setupEnhancedImageObserver() {
   console.log('Setting up enhanced image observer');
   
-  // Create MutationObserver to detect DOM changes
   imageObserver = new MutationObserver((mutations) => {
-    let hasNewImages = false;
+    let newImages = [];
     
     mutations.forEach((mutation) => {
-      // Check added nodes
       if (mutation.addedNodes && mutation.addedNodes.length > 0) {
         mutation.addedNodes.forEach((node) => {
           if (node.nodeType === Node.ELEMENT_NODE) {
-            // Check if the node itself is an image
             if (node.tagName === 'IMG') {
               if (shouldProcessImage(node)) {
-                hasNewImages = true;
-                if (autoTranslateEnabled && node.matches(currentSelector)) {
-                  queueImageForTranslation(node);
-                }
+                newImages.push(node);
               }
             }
             
-            // Check if the node contains images
             const images = node.getElementsByTagName('img');
             if (images && images.length > 0) {
               Array.from(images).forEach(img => {
                 if (shouldProcessImage(img)) {
-                  hasNewImages = true;
-                  if (autoTranslateEnabled && img.matches(currentSelector)) {
-                    queueImageForTranslation(img);
-                  }
+                  newImages.push(img);
                 }
               });
             }
             
-            // Check for images with data-src (lazy loading)
             const lazyImages = node.querySelectorAll('img[data-src], img[data-lazy-src]');
             if (lazyImages && lazyImages.length > 0) {
               lazyImages.forEach(img => {
                 if (shouldProcessImage(img)) {
-                  hasNewImages = true;
                   setupLazyLoadingObserver(img);
                 }
               });
@@ -126,29 +149,44 @@ function setupEnhancedImageObserver() {
         });
       }
       
-      // Check for attribute changes (useful for lazy loading)
       if (mutation.type === 'attributes') {
         const target = mutation.target;
         if (target.tagName === 'IMG') {
-          // Check if src attribute was modified
           if (mutation.attributeName === 'src' || mutation.attributeName === 'data-src') {
             if (shouldProcessImage(target)) {
-              hasNewImages = true;
-              if (autoTranslateEnabled && target.matches(currentSelector)) {
-                queueImageForTranslation(target);
-              }
+              newImages.push(target);
             }
           }
         }
       }
     });
     
-    if (hasNewImages) {
-      console.log('New images detected by observer');
+    if (newImages.length > 0) {
+      console.log('New images detected by observer', newImages.length);
+      
+      const matchingImages = newImages.filter(img => img.matches(currentSelector));
+      
+      if (matchingImages.length > 0) {
+        // Apply cache in background (non-blocking)
+        matchingImages.forEach(img => {
+          const elementInfo = getElementInfo(img);
+          browser.runtime.sendMessage({
+            action: 'applyCacheOnly',
+            imageUrl: img.src,
+            imageElement: elementInfo
+          }).catch(() => {});
+        });
+        
+        // Queue for translation if auto-translate enabled
+        if (autoTranslateEnabled) {
+          matchingImages.forEach(img => {
+            queueImageForTranslation(img);
+          });
+        }
+      }
     }
   });
   
-  // Start observing with comprehensive options
   imageObserver.observe(document.body, {
     childList: true,
     subtree: true,

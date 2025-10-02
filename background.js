@@ -22,6 +22,10 @@ const DEFAULT_SETTINGS = {
   autoTranslate: true
 };
 
+let activeTranslations = new Map(); 
+let translationQueue = []; 
+let isProcessingQueue = false;
+
 // Initialize extension when installed
 browser.runtime.onInstalled.addListener(() => {
   // Set default settings if not exist
@@ -54,14 +58,12 @@ function createContextMenus() {
 // Handle context menu clicks
 browser.contextMenus.onClicked.addListener((info, tab) => {
   if (info.menuItemId === "translate-image") {
-    // Translate single image
+    // Only translate the clicked image, not all images
     translateImage(info.srcUrl, tab.id, null, true);
   } else if (info.menuItemId === "translate-batch-selector") {
-    // Show batch translation dialog
     browser.tabs.sendMessage(tab.id, {
       action: 'showBatchSelectorDialog'
     }).catch(() => {
-      // Inject content script if not ready
       browser.tabs.executeScript(tab.id, {
         file: 'content.js'
       }).then(() => {
@@ -100,16 +102,36 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     });
     return true;
   }
+
   
-  if (message.action === 'getCacheKey') {
-    // Generate cache key for image
-    const cacheKey = generateCacheKey(message.imageUrl, message.settings);
-    sendResponse({ cacheKey });
+  if (message.action === 'applyCacheOnly') {
+    // Apply cache if exists, don't block, don't wait
+    applyCacheIfExists(message.imageUrl, message.imageElement, sender.tab.id);
+    sendResponse({ success: true });
     return true;
   }
   
   return true;
 });
+
+async function applyCacheIfExists(imageUrl, imageElement, tabId) {
+  try {
+    const { settings } = await browser.storage.local.get('settings');
+    const config = settings || DEFAULT_SETTINGS;
+    
+    if (!config.enableCache) return;
+    
+    const cacheKey = generateCacheKey(imageUrl, config);
+    const cachedResult = await getCachedTranslation(cacheKey);
+    
+    if (cachedResult) {
+      console.log('Applying cached translation for:', imageUrl);
+      applyCachedResult(cachedResult, imageElement, tabId, imageUrl);
+    }
+  } catch (error) {
+    console.error('Apply cache error:', error);
+  }
+}
 
 // Convert blob to base64 string
 async function blobToBase64(blob) {
@@ -247,25 +269,40 @@ async function cacheTranslation(cacheKey, result) {
 
 // Main translation function with improved error handling
 async function translateImage(imageUrl, tabId, imageElement, isManual = false) {
+  // Check if already processing
+  if (activeTranslations.has(imageUrl)) {
+    console.log('Image already being processed:', imageUrl);
+    if (isManual) {
+      browser.notifications.create({
+        type: 'basic',
+        iconUrl: 'icons/icon-48.png',
+        title: 'Manga Translator',
+        message: 'Translation in progress, please wait...'
+      });
+    }
+    return;
+  }
+
+  activeTranslations.set(imageUrl, { tabId, imageElement, startTime: Date.now() });
+
   try {
-    // Get current settings
     const { settings } = await browser.storage.local.get('settings');
     const config = settings || DEFAULT_SETTINGS;
     
-    // Generate cache key for this image
     const cacheKey = generateCacheKey(imageUrl, config);
     
-    // Check cache first if enabled
-    if (settings.enableCache) {
+    // Check cache FIRST
+    if (config.enableCache) {
       const cachedResult = await getCachedTranslation(cacheKey);
       if (cachedResult) {
         console.log('Using cached translation for:', imageUrl);
         applyCachedResult(cachedResult, imageElement, tabId, imageUrl);
+        activeTranslations.delete(imageUrl);
         return;
       }
     }
     
-    // Show notification for manual translations
+    // No cache, proceed with translation
     if (isManual) {
       browser.notifications.create({
         type: 'basic',
@@ -275,33 +312,26 @@ async function translateImage(imageUrl, tabId, imageElement, isManual = false) {
       });
     }
     
-    // Fetch the image
     const imageBlob = await fetchImage(imageUrl);
     
-    // Process based on display mode
     let result;
     if (config.displayMode === 'download') {
-      // Download mode - open in new tab
       result = await sendToBackend(imageBlob, config);
       result.mode = 'download';
       displayResultInNewTab(result.imageUrl, tabId);
     } else if (config.displayMode === 'replace') {
-      // Replace mode - replace image on page
       result = await sendToBackend(imageBlob, config);
       result.mode = 'replace';
       replaceImageInPage(result.imageUrl, imageElement, tabId, imageUrl);
     } else if (config.displayMode === 'overlay') {
-      // Overlay mode - overlay text on image
       try {
         const jsonResult = await sendToBackendJson(imageBlob, config);
         
         if (jsonResult && jsonResult.translations && jsonResult.translations.length > 0) {
-          // Convert translations to text regions
           const textRegions = convertTranslationsToTextRegions(jsonResult.translations, config.targetLang);
           
           let cleanedImageUrl = null;
           if (config.overlayMode === 'cleaned') {
-            // Get cleaned image if needed
             const cleanedResult = await sendToBackend(imageBlob, config);
             cleanedImageUrl = cleanedResult.imageUrl;
             replaceImageInPage(cleanedImageUrl, imageElement, tabId, imageUrl);
@@ -310,38 +340,37 @@ async function translateImage(imageUrl, tabId, imageElement, isManual = false) {
           result = { textRegions, cleanedImageUrl, mode: 'overlay' };
           overlayTextOnImage(textRegions, imageElement, tabId, imageUrl, cleanedImageUrl);
         } else {
-          // No text regions found - log and continue gracefully
           console.warn(`No text regions found in image: ${imageUrl}`);
           result = { mode: 'no_text', error: 'No text regions found' };
           
-          // Notify content script to mark as processed with error
           browser.tabs.sendMessage(tabId, {
             action: 'markImageProcessed',
             imageElement: imageElement,
             originalImageUrl: imageUrl,
             status: 'error',
             error: 'No text regions found'
-          }).catch(() => {
-            // Ignore if content script not available
-          });
+          }).catch(() => {});
         }
       } catch (jsonError) {
-        // Fallback to image mode if JSON fails
-        console.warn(`JSON request failed for ${imageUrl}, falling back to image mode:`, jsonError.message);
-        const fallbackResult = await sendToBackend(imageBlob, config);
-        fallbackResult.mode = 'replace';
-        replaceImageInPage(fallbackResult.imageUrl, imageElement, tabId, imageUrl);
-        result = fallbackResult;
+        console.error(`JSON request failed for ${imageUrl}:`, jsonError.message);
+        result = { mode: 'error', error: jsonError.message };
+        
+        browser.tabs.sendMessage(tabId, {
+          action: 'markImageProcessed',
+          imageElement: imageElement,
+          originalImageUrl: imageUrl,
+          status: 'error',
+          error: jsonError.message
+        }).catch(() => {});
       }
     }
     
-    // Cache the result if successful
-    if (settings.enableCache && result && result.mode !== 'no_text') {
+    // Cache result if successful
+    if (config.enableCache && result && result.mode !== 'no_text' && result.mode !== 'error') {
       await cacheTranslation(cacheKey, result);
     }
     
-    // Show notification for manual translations
-    if (isManual && result.mode !== 'no_text') {
+    if (isManual && result.mode !== 'no_text' && result.mode !== 'error') {
       browser.notifications.create({
         type: 'basic',
         iconUrl: 'icons/icon-48.png',
@@ -353,18 +382,14 @@ async function translateImage(imageUrl, tabId, imageElement, isManual = false) {
   } catch (error) {
     console.error('Translation error:', error);
     
-    // Notify content script to mark as processed with error
     browser.tabs.sendMessage(tabId, {
       action: 'markImageProcessed',
       imageElement: imageElement,
       originalImageUrl: imageUrl,
       status: 'error',
       error: error.message
-    }).catch(() => {
-      // Ignore if content script not available
-    });
+    }).catch(() => {});
     
-    // Show notification for manual translations
     if (isManual) {
       browser.notifications.create({
         type: 'basic',
@@ -373,6 +398,8 @@ async function translateImage(imageUrl, tabId, imageElement, isManual = false) {
         message: `Error: ${error.message}`
       });
     }
+  } finally {
+    activeTranslations.delete(imageUrl);
   }
 }
 
@@ -651,22 +678,24 @@ async function translateBatchWithSelector(selector, tabId) {
               overlayTextOnImage(textRegions, elementInfo, tabId, imgData.src, cleanedImageUrl);
             } else {
               console.warn(`No text regions found in image: ${imgData.src}`);
-              // Mark as processed with no text error
               browser.tabs.sendMessage(tabId, {
                 action: 'markImageProcessed',
                 imageElement: elementInfo,
                 originalImageUrl: imgData.src,
                 status: 'error',
                 error: 'No text regions found'
-              }).catch(() => {
-                // Ignore if content script not available
-              });
+              }).catch(() => {});
             }
           } catch (e) {
-            console.warn(`JSON request failed for ${imgData.src}, falling back to image mode:`, e.message);
-            const result = await sendToBackend(await fetchImage(imgData.src), config);
-            result.mode = 'replace';
-            replaceImageInPage(result.imageUrl, elementInfo, tabId, imgData.src);
+            
+            console.error(`Translation failed for ${imgData.src}:`, e.message);
+            browser.tabs.sendMessage(tabId, {
+              action: 'markImageProcessed',
+              imageElement: elementInfo,
+              originalImageUrl: imgData.src,
+              status: 'error',
+              error: e.message
+            }).catch(() => {});
           }
         } else {
           const result = await sendToBackend(await fetchImage(imgData.src), config);
