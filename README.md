@@ -82,11 +82,6 @@ A Firefox extension that automatically translates manga/comic images using the m
 
 **Important: The API model settings are not fully configured yet.** 
 
-To use the translation features, you must:
-
-1. Set up the manga-image-translator backend separately
-2. Configure the translation models in the backend
-3. Obtain necessary API keys for online translators (if using them)
-4. Set environment variables for your API keys in the backend directory
+To use the translation features, you must set up the manga-image-translator backend separately
 
 For offline translators, the models will be downloaded automatically when first used. For online translators, you'll need to configure the appropriate API keys.
