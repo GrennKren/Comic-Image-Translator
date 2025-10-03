@@ -7,26 +7,42 @@ const DEFAULT_SETTINGS = {
   detector: 'default',
   inpainter: 'lama_large',
   renderer: 'manga2eng',
-  useGpu: false, // Disimpan tapi tidak ditampilkan di UI
   displayMode: 'overlay',
-  customSelector: '[name="image-item"] img', // Default selector sesuai dengan yang Anda gunakan
+  selectorRules: [
+    {
+      enabled: true,
+      domains: '*',
+      selector: 'img.manga-page, img.comic-page',
+      id: Date.now(),
+      isGeneral: true
+    },
+    {
+      enabled: true,
+      domains: 'bato.to',
+      selector: '[name="image-item"] img',
+      id: Date.now() + 1
+    }
+  ],
   enableBatchMode: true,
-  // Overlay settings
   overlayMode: 'colored',
   overlayOpacity: 90,
   overlayTextColor: 'auto',
   customTextColor: '#ffffff',
   draggableOverlay: true,
-  // Cache settings
   enableCache: true,
-  // Other settings
-  skipProcessed: true, // Changed from skipTranslated to skipProcessed
+  skipProcessed: true,
   observeDynamicImages: true,
   autoTranslate: true
 };
 
 // Load settings on popup open
 document.addEventListener('DOMContentLoaded', loadSettings);
+
+document.getElementById('manageSelectorsBtn').addEventListener('click', function() {
+  browser.tabs.create({
+    url: browser.runtime.getURL('selectors.html')
+  });
+});
 
 // Save button handler
 document.getElementById('saveBtn').addEventListener('click', saveSettings);
@@ -47,45 +63,23 @@ document.getElementById('displayMode').addEventListener('change', function() {
   }
 });
 
-// Custom selector change handler for auto-translation
-document.getElementById('customSelector').addEventListener('change', function() {
-  if (this.value && settings.enableBatchMode) {
-    // Notify content script about selector change
-    browser.tabs.query({active: true, currentWindow: true}).then(tabs => {
-      browser.tabs.sendMessage(tabs[0].id, {
-        action: 'updateSelector',
-        selector: this.value
-      }).catch(() => {
-        // Ignore if content script not ready
-      });
-    });
-  }
-});
 
 // Enable batch mode change handler
 document.getElementById('enableBatchMode').addEventListener('change', function() {
-  if (this.checked && document.getElementById('customSelector').value) {
-    // Notify content script to start auto-translation
+  if (this.checked) {
     browser.tabs.query({active: true, currentWindow: true}).then(tabs => {
       browser.tabs.sendMessage(tabs[0].id, {
-        action: 'startAutoTranslate',
-        selector: document.getElementById('customSelector').value
-      }).catch(() => {
-        // Ignore if content script not ready
-      });
+        action: 'startAutoTranslate'
+      }).catch(() => {});
     });
   } else {
-    // Notify content script to stop auto-translation
     browser.tabs.query({active: true, currentWindow: true}).then(tabs => {
       browser.tabs.sendMessage(tabs[0].id, {
         action: 'stopAutoTranslate'
-      }).catch(() => {
-        // Ignore if content script not ready
-      });
+      }).catch(() => {});
     });
   }
   
-  // Update status display
   updateAutoTranslateStatus();
 });
 
@@ -105,10 +99,13 @@ async function loadSettings() {
     const result = await browser.storage.local.get('settings');
     settings = result.settings || DEFAULT_SETTINGS;
     
-    // Populate form fields
+    // Ensure selectorRules exists
+    if (!settings.selectorRules) {
+      settings.selectorRules = DEFAULT_SETTINGS.selectorRules;
+    }
+    
     document.getElementById('backendUrl').value = settings.backendUrl;
     document.getElementById('displayMode').value = settings.displayMode;
-    document.getElementById('customSelector').value = settings.customSelector;
     document.getElementById('enableBatchMode').checked = settings.enableBatchMode;
     document.getElementById('translator').value = settings.translator;
     document.getElementById('targetLang').value = settings.targetLang;
@@ -116,19 +113,16 @@ async function loadSettings() {
     document.getElementById('inpainter').value = settings.inpainter;
     document.getElementById('renderer').value = settings.renderer;
     
-    // Load overlay settings
     document.getElementById('overlayMode').value = settings.overlayMode;
     document.getElementById('overlayOpacity').value = settings.overlayOpacity;
     document.getElementById('overlayTextColor').value = settings.overlayTextColor;
     document.getElementById('customTextColor').value = settings.customTextColor;
     document.getElementById('draggableOverlay').checked = settings.draggableOverlay;
     
-    // Load cache and other settings
     document.getElementById('enableCache').checked = settings.enableCache;
-    document.getElementById('skipProcessed').checked = settings.skipProcessed; // Changed from skipTranslated
+    document.getElementById('skipProcessed').checked = settings.skipProcessed;
     document.getElementById('observeDynamicImages').checked = settings.observeDynamicImages;
     
-    // Show/hide overlay settings based on display mode
     const overlaySettings = document.getElementById('overlaySettings');
     if (settings.displayMode === 'overlay') {
       overlaySettings.style.display = 'block';
@@ -136,7 +130,6 @@ async function loadSettings() {
       overlaySettings.style.display = 'none';
     }
     
-    // Show/hide custom color picker
     const customColorGroup = document.getElementById('customColorGroup');
     if (settings.overlayTextColor === 'custom') {
       customColorGroup.style.display = 'block';
@@ -144,10 +137,7 @@ async function loadSettings() {
       customColorGroup.style.display = 'none';
     }
     
-    // Update cache info
     updateCacheInfo();
-    
-    // Update auto-translate status
     updateAutoTranslateStatus();
   } catch (error) {
     showStatus('Error loading settings', 'error');
@@ -159,14 +149,10 @@ async function loadSettings() {
 function updateAutoTranslateStatus() {
   const statusElement = document.getElementById('autoTranslateStatus');
   const isEnabled = document.getElementById('enableBatchMode').checked;
-  const hasSelector = document.getElementById('customSelector').value.length > 0;
   
-  if (isEnabled && hasSelector) {
+  if (isEnabled) {
     statusElement.textContent = 'Status: Active';
     statusElement.style.color = '#28a745';
-  } else if (isEnabled && !hasSelector) {
-    statusElement.textContent = 'Status: Waiting for selector';
-    statusElement.style.color = '#ffc107';
   } else {
     statusElement.textContent = 'Status: Disabled';
     statusElement.style.color = '#6c757d';
@@ -179,56 +165,38 @@ async function saveSettings() {
     const settings = {
       backendUrl: document.getElementById('backendUrl').value.trim(),
       displayMode: document.getElementById('displayMode').value,
-      customSelector: document.getElementById('customSelector').value.trim(),
+      selectorRules: (await browser.storage.local.get('settings')).settings?.selectorRules || DEFAULT_SETTINGS.selectorRules,
       enableBatchMode: document.getElementById('enableBatchMode').checked,
       translator: document.getElementById('translator').value,
       targetLang: document.getElementById('targetLang').value,
       detector: document.getElementById('detector').value,
       inpainter: document.getElementById('inpainter').value,
       renderer: document.getElementById('renderer').value,
-      useGpu: false, // Selalu false, tidak ada opsi UI
-      // Save overlay settings
       overlayMode: document.getElementById('overlayMode').value,
       overlayOpacity: parseInt(document.getElementById('overlayOpacity').value),
       overlayTextColor: document.getElementById('overlayTextColor').value,
       customTextColor: document.getElementById('customTextColor').value,
       draggableOverlay: document.getElementById('draggableOverlay').checked,
-      // Save cache and other settings
       enableCache: document.getElementById('enableCache').checked,
-      skipProcessed: document.getElementById('skipProcessed').checked, // Changed from skipTranslated
+      skipProcessed: document.getElementById('skipProcessed').checked,
       observeDynamicImages: document.getElementById('observeDynamicImages').checked,
       autoTranslate: true
     };
     
-    // Validate backend URL
     if (!settings.backendUrl) {
       showStatus('Backend URL is required', 'error');
       return;
     }
     
-    // Validate custom selector if provided
-    if (settings.customSelector) {
-      try {
-        document.querySelectorAll(settings.customSelector);
-      } catch (e) {
-        showStatus('Invalid CSS selector', 'error');
-        return;
-      }
-    }
-    
     await browser.storage.local.set({ settings });
     showStatus('Settings saved successfully!', 'success');
     
-    // Reload content scripts to apply new settings
     browser.tabs.query({}).then(tabs => {
       tabs.forEach(tab => {
-        browser.tabs.sendMessage(tab.id, { action: 'reloadSettings', settings: settings }).catch(() => {
-          // Ignore errors for tabs without content script
-        });
+        browser.tabs.sendMessage(tab.id, { action: 'reloadSettings', settings: settings }).catch(() => {});
       });
     });
     
-    // Close popup after 1 second
     setTimeout(() => window.close(), 1000);
   } catch (error) {
     showStatus('Error saving settings', 'error');

@@ -27,7 +27,6 @@ browser.runtime.sendMessage({ action: 'getSettings' }).then(response => {
     inpainter: 'lama_large',
     renderer: 'manga2eng',
     displayMode: 'overlay',
-    customSelector: '[name="image-item"] img',
     enableBatchMode: true,
     overlayMode: 'colored',
     overlayOpacity: 90,
@@ -56,13 +55,13 @@ function setupFeatures() {
     pageChangeObserver = null;
   }
   
-  // Preload cache for existing images
-  if (settings.enableCache && settings.customSelector) {
+  currentSelector = getActiveSelectors();
+  
+  if (settings.enableCache && currentSelector) {
     preloadCacheForExistingImages();
   }
   
-  if (settings.enableBatchMode && settings.customSelector) {
-    currentSelector = settings.customSelector;
+  if (settings.enableBatchMode && currentSelector) {
     startAutoTranslation();
   } else {
     startAutoTranslation();
@@ -73,9 +72,51 @@ function setupFeatures() {
     setupPageChangeObserver();
   }
   
-  if (!settings.customSelector || !settings.enableBatchMode) {
+  if (!currentSelector || !settings.enableBatchMode) {
     initializeHoverButtons();
   }
+}
+
+function matchesDomain(currentDomain, ruleDomainsString) {
+  const ruleDomains = ruleDomainsString.split(',').map(d => d.trim()).filter(d => d);
+  
+  for (const ruleDomain of ruleDomains) {
+    const pattern = ruleDomain.replace(/\*/g, '.*').replace(/\./g, '\\.');
+    const regex = new RegExp(`^${pattern}$`, 'i');
+    
+    if (regex.test(currentDomain)) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+function getActiveSelectors() {
+  const currentDomain = window.location.hostname;
+  
+  if (!settings.selectorRules || !Array.isArray(settings.selectorRules)) {
+    return null;
+  }
+  
+  // Check if there's a specific domain rule first
+  const specificRules = settings.selectorRules
+    .filter(rule => rule.enabled && !rule.isGeneral && matchesDomain(currentDomain, rule.domains))
+    .map(rule => rule.selector)
+    .filter(s => s);
+  
+  // If specific rule exists, use only specific rules (ignore general)
+  if (specificRules.length > 0) {
+    return specificRules.join(', ');
+  }
+  
+  // If no specific rule, use general rules
+  const generalRules = settings.selectorRules
+    .filter(rule => rule.enabled && rule.isGeneral)
+    .map(rule => rule.selector)
+    .filter(s => s);
+  
+  return generalRules.length > 0 ? generalRules.join(', ') : null;
 }
 
 // New function to preload cache
@@ -283,18 +324,23 @@ function scanExistingImages() {
 
 // Start auto-translation
 function startAutoTranslation(selector = null) {
-  if (!settings.customSelector && !selector) {
-    console.log('No selector specified for auto-translation, using default');
-    currentSelector = '[name="image-item"] img'; // Default selector
+  if (selector) {
+    currentSelector = selector;
   } else {
-    currentSelector = selector || settings.customSelector;
+    currentSelector = getActiveSelectors();
+  }
+  
+  if (!currentSelector) {
+    console.log('No active selector for current domain');
+    currentSelector = '';
+    autoTranslateEnabled = false;
+    return;
   }
   
   autoTranslateEnabled = true;
   
   console.log('Starting auto-translation with selector:', currentSelector);
   
-  // Scan existing images immediately
   scanExistingImages();
 }
 

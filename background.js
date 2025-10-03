@@ -9,7 +9,21 @@ const DEFAULT_SETTINGS = {
   inpainter: 'lama_large',
   renderer: 'manga2eng',
   displayMode: 'overlay',
-  customSelector: '[name="image-item"] img',
+  selectorRules: [
+    {
+      enabled: true,
+      domains: '*',
+      selector: 'img.manga-page, img.comic-page',
+      id: Date.now(),
+      isGeneral: true
+    },
+    {
+      enabled: true,
+      domains: 'bato.to',
+      selector: '[name="image-item"] img',
+      id: Date.now() + 1
+    }
+  ],
   enableBatchMode: true,
   overlayMode: 'colored',
   overlayOpacity: 90,
