@@ -824,6 +824,85 @@ function overlayTextBoxes(textRegions, elementInfo, originalImageUrl, cleanedIma
     return;
   }
   
+  // Wait for image to be fully loaded and visible
+  waitForImageReady(element).then(() => {
+    createOverlayForImage(element, textRegions, elementInfo, originalImageUrl, cleanedImageUrl);
+  }).catch(error => {
+    console.error('Error waiting for image ready:', error);
+  });
+}
+
+// New function to wait for image to be ready
+function waitForImageReady(img) {
+  return new Promise((resolve, reject) => {
+    // Check if image is already loaded and has dimensions
+    if (img.complete && img.naturalWidth > 0 && img.naturalHeight > 0) {
+      // Check if element has rendered dimensions
+      const rect = img.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        resolve();
+        return;
+      }
+    }
+    
+    // Wait for load event
+    const handleLoad = () => {
+      cleanup();
+      // Double check dimensions after load
+      checkDimensions();
+    };
+    
+    const handleError = () => {
+      cleanup();
+      reject(new Error('Image failed to load'));
+    };
+    
+    const checkDimensions = () => {
+      const rect = img.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        resolve();
+      } else {
+        // Use IntersectionObserver if dimensions still not available
+        observeVisibility();
+      }
+    };
+    
+    const observeVisibility = () => {
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting && entry.boundingClientRect.width > 0) {
+            observer.disconnect();
+            resolve();
+          }
+        });
+      }, { threshold: 0.01 });
+      
+      observer.observe(img);
+      
+      // Fallback timeout
+      setTimeout(() => {
+        observer.disconnect();
+        resolve(); // Resolve anyway after timeout
+      }, 5000);
+    };
+    
+    const cleanup = () => {
+      img.removeEventListener('load', handleLoad);
+      img.removeEventListener('error', handleError);
+    };
+    
+    img.addEventListener('load', handleLoad);
+    img.addEventListener('error', handleError);
+    
+    // If image is already complete but failed earlier checks, try intersection observer
+    if (img.complete) {
+      cleanup();
+      checkDimensions();
+    }
+  });
+}
+
+function createOverlayForImage(element, textRegions, elementInfo, originalImageUrl, cleanedImageUrl) {
   // Remove existing overlays
   const existingOverlay = document.querySelector(`[data-overlay-for="${elementInfo ? elementInfo.uid : originalImageUrl}"]`);
   if (existingOverlay) {
@@ -832,7 +911,19 @@ function overlayTextBoxes(textRegions, elementInfo, originalImageUrl, cleanedIma
   
   const rect = element.getBoundingClientRect();
   
-  // Create main overlay container
+  // Final check for valid dimensions
+  if (rect.width === 0 || rect.height === 0) {
+    console.warn('Image still has no dimensions, retrying...', originalImageUrl);
+    // Retry after a short delay
+    setTimeout(() => {
+      const newRect = element.getBoundingClientRect();
+      if (newRect.width > 0 && newRect.height > 0) {
+        createOverlayForImage(element, textRegions, elementInfo, originalImageUrl, cleanedImageUrl);
+      }
+    }, 500);
+    return;
+  }
+  
   const overlayContainer = document.createElement('div');
   overlayContainer.dataset.overlayFor = elementInfo ? elementInfo.uid : originalImageUrl;
   overlayContainer.style.cssText = `
@@ -845,7 +936,6 @@ function overlayTextBoxes(textRegions, elementInfo, originalImageUrl, cleanedIma
     z-index: 9999;
   `;
   
-  // If cleaned mode, create cleaned background
   if (settings.overlayMode === 'cleaned' && cleanedImageUrl) {
     const cleanedImg = document.createElement('img');
     cleanedImg.src = cleanedImageUrl;
@@ -861,7 +951,6 @@ function overlayTextBoxes(textRegions, elementInfo, originalImageUrl, cleanedIma
     overlayContainer.appendChild(cleanedImg);
   }
   
-  // Add text regions
   if (textRegions && textRegions.length > 0) {
     textRegions.forEach(region => {
       const textBox = createTextBox(region, rect, element);
@@ -891,16 +980,17 @@ function overlayTextBoxes(textRegions, elementInfo, originalImageUrl, cleanedIma
   // Update position on scroll/resize
   const updatePosition = () => {
     const newRect = element.getBoundingClientRect();
-    overlayContainer.style.left = `${newRect.left + window.scrollX}px`;
-    overlayContainer.style.top = `${newRect.top + window.scrollY}px`;
-    overlayContainer.style.width = `${newRect.width}px`;
-    overlayContainer.style.height = `${newRect.height}px`;
+    if (newRect.width > 0 && newRect.height > 0) {
+      overlayContainer.style.left = `${newRect.left + window.scrollX}px`;
+      overlayContainer.style.top = `${newRect.top + window.scrollY}px`;
+      overlayContainer.style.width = `${newRect.width}px`;
+      overlayContainer.style.height = `${newRect.height}px`;
+    }
   };
   
   window.addEventListener('scroll', updatePosition);
   window.addEventListener('resize', updatePosition);
   
-  // Mark image as processed
   markImageAsProcessed(element, 'ok');
   element.style.outline = '2px solid #4A90E2';
   setTimeout(() => {
