@@ -48,46 +48,56 @@ browser.runtime.onInstalled.addListener(() => {
       browser.storage.local.set({ settings: DEFAULT_SETTINGS });
     }
   });
-  // Create context menu items
-  createContextMenus();
+  
+  // Create context menu items only if API is available (not on Android)
+  if (typeof browser.contextMenus !== 'undefined') {
+    try {
+      createContextMenus();
+    } catch (e) {
+      console.log('Context menus not supported on this platform');
+    }
+  }
 });
 
 // Create context menu items for translation
 function createContextMenus() {
-  // Single image translation menu
-  browser.contextMenus.create({
-    id: "translate-image",
-    title: "Translate Manga Image",
-    contexts: ["image"]
-  });
-  
-  // Batch translation menu
-  browser.contextMenus.create({
-    id: "translate-batch-selector",
-    title: "Translate Images with CSS Selector...",
-    contexts: ["page", "selection", "link"]
-  });
-}
-
-// Handle context menu clicks
-browser.contextMenus.onClicked.addListener((info, tab) => {
-  if (info.menuItemId === "translate-image") {
-    // Only translate the clicked image, not all images
-    translateImage(info.srcUrl, tab.id, null, true);
-  } else if (info.menuItemId === "translate-batch-selector") {
-    browser.tabs.sendMessage(tab.id, {
-      action: 'showBatchSelectorDialog'
-    }).catch(() => {
-      browser.tabs.executeScript(tab.id, {
-        file: 'content.js'
-      }).then(() => {
+  try {
+    // Single image translation menu
+    browser.contextMenus.create({
+      id: "translate-image",
+      title: "Translate Manga Image",
+      contexts: ["image"]
+    });
+    
+    // Batch translation menu
+    browser.contextMenus.create({
+      id: "translate-batch-selector",
+      title: "Translate Images with CSS Selector...",
+      contexts: ["page", "selection", "link"]
+    });
+    
+    // Setup click listener only if create succeeded
+    browser.contextMenus.onClicked.addListener((info, tab) => {
+      if (info.menuItemId === "translate-image") {
+        translateImage(info.srcUrl, tab.id, null, true);
+      } else if (info.menuItemId === "translate-batch-selector") {
         browser.tabs.sendMessage(tab.id, {
           action: 'showBatchSelectorDialog'
+        }).catch(() => {
+          browser.tabs.executeScript(tab.id, {
+            file: 'content.js'
+          }).then(() => {
+            browser.tabs.sendMessage(tab.id, {
+              action: 'showBatchSelectorDialog'
+            });
+          });
         });
-      });
+      }
     });
+  } catch (e) {
+    console.log('Failed to setup context menus:', e);
   }
-});
+}
 
 // Listen for messages from content script
 browser.runtime.onMessage.addListener((message, sender, sendResponse) => {

@@ -11,14 +11,41 @@ let isProcessing = false;
 let pageChangeObserver = null;
 let cacheProcessingQueue = [];
 let isCacheProcessing = false;
+let settingsLoaded = false;
 
-// Load settings on page load
-browser.runtime.sendMessage({ action: 'getSettings' }).then(response => {
-  settings = response.settings;
-  setupFeatures();
-}).catch(error => {
-  console.error('Error loading settings:', error);
-  // Use default settings if failed to load
+// Load settings with retry mechanism
+async function loadSettingsWithRetry(retries = 5, delay = 200) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      // Try to load directly from storage first
+      const result = await browser.storage.local.get('settings');
+      if (result.settings && result.settings.backendUrl) {
+        console.log('Settings loaded from storage:', result.settings);
+        settings = result.settings;
+        settingsLoaded = true;
+        setupFeatures();
+        return;
+      }
+      
+      // If not in storage, try to get from background
+      const response = await browser.runtime.sendMessage({ action: 'getSettings' });
+      if (response && response.settings) {
+        console.log('Settings loaded from background:', response.settings);
+        settings = response.settings;
+        settingsLoaded = true;
+        setupFeatures();
+        return;
+      }
+    } catch (error) {
+      console.log(`Attempt ${i + 1} to load settings failed:`, error.message);
+      if (i < retries - 1) {
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  }
+  
+  // If all retries failed, use default settings
+  console.warn('Failed to load settings after retries, using defaults');
   settings = {
     backendUrl: 'http://127.0.0.1:8000',
     translator: 'sugoi',
@@ -38,11 +65,20 @@ browser.runtime.sendMessage({ action: 'getSettings' }).then(response => {
     observeDynamicImages: true,
     autoTranslate: true
   };
+  settingsLoaded = true;
   setupFeatures();
-});
+}
+
+// Load settings on page load
+loadSettingsWithRetry();
 
 // Setup all features based on current settings
 function setupFeatures() {
+  if (!settingsLoaded) {
+    console.log('Settings not loaded yet, skipping setup');
+    return;
+  }
+  
   console.log('Setting up features with settings:', settings);
   
   if (imageObserver) {
@@ -72,9 +108,7 @@ function setupFeatures() {
     setupPageChangeObserver();
   }
   
-  if (!currentSelector || !settings.enableBatchMode) {
-    initializeHoverButtons();
-  }
+  initializeHoverButtons();
 }
 
 function matchesDomain(currentDomain, ruleDomainsString) {
