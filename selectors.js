@@ -5,7 +5,14 @@ document.addEventListener('DOMContentLoaded', loadRules);
 document.getElementById('addRuleBtn').addEventListener('click', addNewRule);
 document.getElementById('saveBtn').addEventListener('click', saveRules);
 document.getElementById('exportBtn').addEventListener('click', exportRules);
-document.getElementById('importInput').addEventListener('change', importRules);
+document.getElementById('importBtn').addEventListener('click', function() {
+  document.getElementById('importInput').click();
+});
+
+const mobileSaveBtn = document.getElementById('mobileSaveBtn');
+if (mobileSaveBtn) {
+  mobileSaveBtn.addEventListener('click', saveRules);
+}
 
 async function loadRules() {
   try {
@@ -29,89 +36,120 @@ async function loadRules() {
 }
 
 function renderRules() {
-  const tbody = document.getElementById('rulesBody');
+  const container = document.getElementById('rulesContainer');
   const emptyState = document.getElementById('emptyState');
   
   if (rules.length === 0) {
-    tbody.innerHTML = '';
+    container.innerHTML = '';
     emptyState.style.display = 'block';
     return;
   }
   
   emptyState.style.display = 'none';
-  
-  // Clear existing content
-  tbody.innerHTML = '';
+  container.innerHTML = '';
   
   rules.forEach((rule, index) => {
     const isGeneral = rule.domains === '*' || rule.isGeneral;
-    const domainValue = isGeneral ? '*' : rule.domains;
-    const domainReadonly = isGeneral ? 'readonly style="background: #f0f0f0; cursor: not-allowed;"' : '';
-    const badgeHtml = isGeneral ? '<span style="display: inline-block; background: #ffc107; color: #333; padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: 600; margin-left: 8px;">GENERAL</span>' : '';
-    
-    // Create row element
-    const row = document.createElement('tr');
-    row.setAttribute('data-index', index);
-    
-    row.innerHTML = `
-      <td style="text-align: center;">
-        <input type="checkbox" class="rule-enabled" ${rule.enabled ? 'checked' : ''}>
-      </td>
-      <td>
-        <input type="text" class="rule-domains" placeholder="e.g., bato.to, manga*.com or * for general" ${domainReadonly}>
-        ${badgeHtml}
-      </td>
-      <td>
-        <input type="text" class="rule-selector" placeholder="e.g., img.manga-page, .comic img">
-      </td>
-      <td style="text-align: center;">
-        <button class="btn-small btn-delete">Delete</button>
-      </td>
-    `;
-    
-    // Append row to tbody
-    tbody.appendChild(row);
-    
-    // Now safely set values using JavaScript (after element is in DOM)
-    const domainsInput = row.querySelector('.rule-domains');
-    const selectorInput = row.querySelector('.rule-selector');
-    
-    domainsInput.value = domainValue;  // Safe: JS handles quotes
-    selectorInput.value = rule.selector;  // Safe: JS handles quotes like [name="image-item"] img
+    const card = createRuleCard(rule, index, isGeneral);
+    container.appendChild(card);
   });
-  
-  attachRowEventListeners();
 }
 
-function attachRowEventListeners() {
-  document.querySelectorAll('.rule-enabled').forEach((checkbox, index) => {
-    checkbox.addEventListener('change', (e) => {
-      rules[index].enabled = e.target.checked;
-    });
+function createRuleCard(rule, index, isGeneral) {
+  const card = document.createElement('div');
+  card.className = 'rule-card';
+  card.setAttribute('data-index', index);
+  
+  const header = document.createElement('div');
+  header.className = 'rule-header';
+  
+  const toggle = document.createElement('div');
+  toggle.className = 'rule-toggle';
+  
+  const checkbox = document.createElement('input');
+  checkbox.type = 'checkbox';
+  checkbox.checked = rule.enabled;
+  checkbox.id = `rule-enabled-${index}`;
+  checkbox.addEventListener('change', (e) => {
+    rules[index].enabled = e.target.checked;
   });
   
-  document.querySelectorAll('.rule-domains').forEach((input, index) => {
-    input.addEventListener('input', (e) => {
-      const value = e.target.value.trim();
-      rules[index].domains = value;
-      rules[index].isGeneral = value === '*';
-    });
+  const label = document.createElement('label');
+  label.htmlFor = `rule-enabled-${index}`;
+  label.textContent = 'Enabled';
+  
+  toggle.appendChild(checkbox);
+  toggle.appendChild(label);
+  
+  if (isGeneral) {
+    const badge = document.createElement('span');
+    badge.className = 'rule-badge';
+    badge.textContent = 'GENERAL';
+    toggle.appendChild(badge);
+  }
+  
+  const actions = document.createElement('div');
+  actions.className = 'rule-actions';
+  
+  const deleteBtn = document.createElement('button');
+  deleteBtn.className = 'btn-delete';
+  deleteBtn.textContent = 'Delete';
+  deleteBtn.addEventListener('click', () => {
+    if (confirm('Are you sure you want to delete this rule?')) {
+      rules.splice(index, 1);
+      renderRules();
+    }
   });
   
-  document.querySelectorAll('.rule-selector').forEach((input, index) => {
-    input.addEventListener('input', (e) => {
-      rules[index].selector = e.target.value;
-    });
+  actions.appendChild(deleteBtn);
+  
+  header.appendChild(toggle);
+  header.appendChild(actions);
+  
+  const domainField = document.createElement('div');
+  domainField.className = 'rule-field';
+  
+  const domainLabel = document.createElement('label');
+  domainLabel.textContent = 'Domain(s):';
+  
+  const domainInput = document.createElement('input');
+  domainInput.type = 'text';
+  domainInput.value = isGeneral ? '*' : rule.domains;
+  domainInput.placeholder = 'e.g., bato.to, manga*.com or * for general';
+  if (isGeneral) {
+    domainInput.readOnly = true;
+  }
+  domainInput.addEventListener('input', (e) => {
+    const value = e.target.value.trim();
+    rules[index].domains = value;
+    rules[index].isGeneral = value === '*';
   });
   
-  document.querySelectorAll('.btn-delete').forEach((btn, index) => {
-    btn.addEventListener('click', () => {
-      if (confirm('Are you sure you want to delete this rule?')) {
-        rules.splice(index, 1);
-        renderRules();
-      }
-    });
+  domainField.appendChild(domainLabel);
+  domainField.appendChild(domainInput);
+  
+  const selectorField = document.createElement('div');
+  selectorField.className = 'rule-field';
+  
+  const selectorLabel = document.createElement('label');
+  selectorLabel.textContent = 'CSS Selector:';
+  
+  const selectorInput = document.createElement('input');
+  selectorInput.type = 'text';
+  selectorInput.value = rule.selector;
+  selectorInput.placeholder = 'e.g., img.manga-page, .comic img';
+  selectorInput.addEventListener('input', (e) => {
+    rules[index].selector = e.target.value;
   });
+  
+  selectorField.appendChild(selectorLabel);
+  selectorField.appendChild(selectorInput);
+  
+  card.appendChild(header);
+  card.appendChild(domainField);
+  card.appendChild(selectorField);
+  
+  return card;
 }
 
 function addNewRule() {
@@ -124,10 +162,10 @@ function addNewRule() {
   });
   renderRules();
   
-  const tbody = document.getElementById('rulesBody');
-  const lastRow = tbody.lastElementChild;
-  const domainsInput = lastRow.querySelector('.rule-domains');
-  domainsInput.focus();
+  const container = document.getElementById('rulesContainer');
+  const lastCard = container.lastElementChild;
+  const domainInput = lastCard.querySelector('input[type="text"]');
+  domainInput.focus();
 }
 
 async function saveRules() {
@@ -156,10 +194,6 @@ async function saveRules() {
         }).catch(() => {});
       });
     });
-    
-    //setTimeout(() => {
-    //  window.close();
-    //}, 1500);
   } catch (error) {
     console.error('Error saving rules:', error);
     showStatus('Error saving rules', 'error');
@@ -204,7 +238,8 @@ function importRules(event) {
         enabled: rule.enabled !== false,
         domains: rule.domains,
         selector: rule.selector,
-        id: rule.id || Date.now() + Math.random()
+        id: rule.id || Date.now() + Math.random(),
+        isGeneral: rule.domains === '*' || rule.isGeneral
       }));
       
       if (validImported.length === 0) {
@@ -234,10 +269,4 @@ function showStatus(message, type) {
   setTimeout(() => {
     statusEl.style.display = 'none';
   }, 3000);
-}
-
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
 }

@@ -1,5 +1,3 @@
-// Popup script for settings management
-
 const DEFAULT_SETTINGS = {
   backendUrl: 'http://127.0.0.1:8000',
   translator: 'sugoi',
@@ -8,6 +6,10 @@ const DEFAULT_SETTINGS = {
   inpainter: 'lama_large',
   renderer: 'manga2eng',
   displayMode: 'overlay',
+  inpaintingSize: 2048,
+  autoReduceInpainting: true,
+  showProcessIndicator: true,
+  fontSizeOffset: 0,
   selectorRules: [
     {
       enabled: true,
@@ -38,10 +40,69 @@ const DEFAULT_SETTINGS = {
 // Load settings on popup open
 document.addEventListener('DOMContentLoaded', loadSettings);
 
-document.getElementById('manageSelectorsBtn').addEventListener('click', function() {
-  browser.tabs.create({
-    url: browser.runtime.getURL('selectors.html')
+// Initialize collapsible when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+  // Open Basic Settings by default
+  const basicSettings = document.querySelector('.collapsible');
+  if (basicSettings) {
+    const content = basicSettings.querySelector('.collapsible-content');
+    const arrow = basicSettings.querySelector('.collapsible-arrow');
+    
+    if (content && arrow) {
+      content.classList.add('open');
+      arrow.classList.add('open');
+    }
+  }
+  
+  // Add click listeners to all collapsible headers
+  const headers = document.querySelectorAll('.collapsible-header');
+  headers.forEach(header => {
+    header.addEventListener('click', function() {
+      toggleCollapsible(this);
+    });
   });
+});
+
+// Manage Selectors button handler
+
+document.getElementById('manageSelectorsBtn').addEventListener('click', async function() {
+  const selectorsUrl = browser.runtime.getURL('selectors.html');
+  
+  if (await isPopup()) {
+    // Desktop popup: open selectors in new tab and close popup
+    await openOrSwitchToTab(selectorsUrl);
+    window.close();
+  } else {
+    // Mobile tab: replace current page
+    window.location.href = selectorsUrl;
+  }
+});
+
+document.getElementById('fontSizeOffset').addEventListener('change', function() {
+  const value = this.value;
+  const info = document.querySelector('label[for="fontSizeOffset"]').nextElementSibling;
+  if (value > 0) {
+    info.textContent = `Font size increased by ${value} pixels`;
+  } else if (value < 0) {
+    info.textContent = `Font size decreased by ${Math.abs(value)} pixels`;
+  } else {
+    info.textContent = 'Default font size';
+  }
+});
+
+// Configuration button handler
+document.getElementById('configBtn').addEventListener('click', async function() {
+  const configUrl = browser.runtime.getURL('configuration.html');
+  const popupCheck = await isPopup();
+  
+  console.log('Is popup?', popupCheck); // Debug
+  
+  if (popupCheck) {
+    await openOrSwitchToTab(configUrl);
+    window.close();
+  } else {
+    window.location.href = configUrl;
+  }
 });
 
 // Save button handler
@@ -62,7 +123,6 @@ document.getElementById('displayMode').addEventListener('change', function() {
     overlaySettings.style.display = 'none';
   }
 });
-
 
 // Enable batch mode change handler
 document.getElementById('enableBatchMode').addEventListener('change', function() {
@@ -93,13 +153,26 @@ document.getElementById('overlayTextColor').addEventListener('change', function(
   }
 });
 
+// Update auto-translate status display
+function updateAutoTranslateStatus() {
+  const statusElement = document.getElementById('autoTranslateStatus');
+  const isEnabled = document.getElementById('enableBatchMode').checked;
+  
+  if (isEnabled) {
+    statusElement.textContent = 'Status: Active';
+    statusElement.style.color = '#28a745';
+  } else {
+    statusElement.textContent = 'Status: Disabled';
+    statusElement.style.color = '#6c757d';
+  }
+}
+
 // Load settings from storage
 async function loadSettings() {
   try {
     const result = await browser.storage.local.get('settings');
     settings = result.settings || DEFAULT_SETTINGS;
     
-    // Ensure selectorRules exists
     if (!settings.selectorRules) {
       settings.selectorRules = DEFAULT_SETTINGS.selectorRules;
     }
@@ -119,9 +192,15 @@ async function loadSettings() {
     document.getElementById('customTextColor').value = settings.customTextColor;
     document.getElementById('draggableOverlay').checked = settings.draggableOverlay;
     
+    document.getElementById('fontSizeOffset').value = settings.fontSizeOffset || 0;
+    
     document.getElementById('enableCache').checked = settings.enableCache;
     document.getElementById('skipProcessed').checked = settings.skipProcessed;
     document.getElementById('observeDynamicImages').checked = settings.observeDynamicImages;
+    
+    document.getElementById('inpaintingSize').value = settings.inpaintingSize || 2048;
+    document.getElementById('autoReduceInpainting').checked = settings.autoReduceInpainting !== false;
+    document.getElementById('showProcessIndicator').checked = settings.showProcessIndicator !== false;
     
     const overlaySettings = document.getElementById('overlaySettings');
     if (settings.displayMode === 'overlay') {
@@ -145,21 +224,6 @@ async function loadSettings() {
   }
 }
 
-// Update auto-translate status display
-function updateAutoTranslateStatus() {
-  const statusElement = document.getElementById('autoTranslateStatus');
-  const isEnabled = document.getElementById('enableBatchMode').checked;
-  
-  if (isEnabled) {
-    statusElement.textContent = 'Status: Active';
-    statusElement.style.color = '#28a745';
-  } else {
-    statusElement.textContent = 'Status: Disabled';
-    statusElement.style.color = '#6c757d';
-  }
-}
-
-// Save settings to storage
 async function saveSettings() {
   try {
     const settings = {
@@ -180,7 +244,11 @@ async function saveSettings() {
       enableCache: document.getElementById('enableCache').checked,
       skipProcessed: document.getElementById('skipProcessed').checked,
       observeDynamicImages: document.getElementById('observeDynamicImages').checked,
-      autoTranslate: true
+      autoTranslate: true,
+      inpaintingSize: parseInt(document.getElementById('inpaintingSize').value),
+      autoReduceInpainting: document.getElementById('autoReduceInpainting').value === 'true',
+      showProcessIndicator: document.getElementById('showProcessIndicator').value === 'true',
+      fontSizeOffset: parseInt(document.getElementById('fontSizeOffset').value)
     };
     
     if (!settings.backendUrl) {
@@ -251,4 +319,46 @@ function showStatus(message, type) {
   setTimeout(() => {
     statusEl.style.display = 'none';
   }, 3000);
+}
+
+// Make sure functions are available globally
+function toggleCollapsible(header) {
+  const content = header.nextElementSibling;
+  const arrow = header.querySelector('.collapsible-arrow');
+  
+  content.classList.toggle('open');
+  arrow.classList.toggle('open');
+}
+
+// Check if we're in popup or tab
+async function isPopup() {
+  try {
+    const currentWindow = await browser.windows.getCurrent();
+    
+    // If innerWidth <= 400, it's desktop popup panel
+    // If innerWidth > 400, it's mobile tab (full width)
+    return window.innerWidth <= 400;
+  } catch (error) {
+    return window.innerWidth <= 400;
+  }
+}
+
+// Smart tab opener - checks if tab already exists
+async function openOrSwitchToTab(url) {
+  try {
+    const tabs = await browser.tabs.query({});
+    const existingTab = tabs.find(tab => 
+      tab.url && tab.url.includes(url.split('/').pop())
+    );
+    
+    if (existingTab) {
+      await browser.tabs.update(existingTab.id, { active: true });
+      await browser.windows.update(existingTab.windowId, { focused: true });
+    } else {
+      await browser.tabs.create({ url: url });
+    }
+  } catch (error) {
+    console.error('Error managing tabs:', error);
+    await browser.tabs.create({ url: url });
+  }
 }

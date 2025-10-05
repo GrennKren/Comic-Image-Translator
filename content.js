@@ -1,5 +1,3 @@
-// Content script for detecting and handling image translations
-
 // Global variables
 let settings = {};
 let selectedImage = null;
@@ -12,12 +10,13 @@ let pageChangeObserver = null;
 let cacheProcessingQueue = [];
 let isCacheProcessing = false;
 let settingsLoaded = false;
+let processIndicator = null; 
+let indicatorAutoHide = true;
 
 // Load settings with retry mechanism
 async function loadSettingsWithRetry(retries = 5, delay = 200) {
   for (let i = 0; i < retries; i++) {
     try {
-      // Try to load directly from storage first
       const result = await browser.storage.local.get('settings');
       if (result.settings && result.settings.backendUrl) {
         console.log('Settings loaded from storage:', result.settings);
@@ -27,7 +26,6 @@ async function loadSettingsWithRetry(retries = 5, delay = 200) {
         return;
       }
       
-      // If not in storage, try to get from background
       const response = await browser.runtime.sendMessage({ action: 'getSettings' });
       if (response && response.settings) {
         console.log('Settings loaded from background:', response.settings);
@@ -44,7 +42,6 @@ async function loadSettingsWithRetry(retries = 5, delay = 200) {
     }
   }
   
-  // If all retries failed, use default settings
   console.warn('Failed to load settings after retries, using defaults');
   settings = {
     backendUrl: 'http://127.0.0.1:8000',
@@ -63,7 +60,9 @@ async function loadSettingsWithRetry(retries = 5, delay = 200) {
     enableCache: true,
     skipProcessed: true,
     observeDynamicImages: true,
-    autoTranslate: true
+    autoTranslate: true,
+    showProcessIndicator: true,
+    fontSizeOffset: 0
   };
   settingsLoaded = true;
   setupFeatures();
@@ -81,6 +80,8 @@ function setupFeatures() {
   
   console.log('Setting up features with settings:', settings);
   
+  createProcessIndicator();
+  
   if (imageObserver) {
     imageObserver.disconnect();
     imageObserver = null;
@@ -93,8 +94,8 @@ function setupFeatures() {
   
   currentSelector = getActiveSelectors();
   
-  if (settings.enableCache && currentSelector) {
-    preloadCacheForExistingImages();
+  if (settings.enableCache) {
+    preloadCacheForAllImages();
   }
   
   if (settings.enableBatchMode && currentSelector) {
@@ -133,18 +134,15 @@ function getActiveSelectors() {
     return null;
   }
   
-  // Check if there's a specific domain rule first
   const specificRules = settings.selectorRules
     .filter(rule => rule.enabled && !rule.isGeneral && matchesDomain(currentDomain, rule.domains))
     .map(rule => rule.selector)
     .filter(s => s);
   
-  // If specific rule exists, use only specific rules (ignore general)
   if (specificRules.length > 0) {
     return specificRules.join(', ');
   }
   
-  // If no specific rule, use general rules
   const generalRules = settings.selectorRules
     .filter(rule => rule.enabled && rule.isGeneral)
     .map(rule => rule.selector)
@@ -153,14 +151,9 @@ function getActiveSelectors() {
   return generalRules.length > 0 ? generalRules.join(', ') : null;
 }
 
-// New function to preload cache
-function preloadCacheForExistingImages() {
-  if (!currentSelector) {
-    currentSelector = settings.customSelector || '[name="image-item"] img';
-  }
-  
+async function preloadCacheForAllImages() {
   try {
-    const images = document.querySelectorAll(currentSelector);
+    const images = document.querySelectorAll('img');
     if (images.length === 0) return;
     
     const imageArray = Array.from(images)
@@ -171,7 +164,6 @@ function preloadCacheForExistingImages() {
     if (imageArray.length > 0) {
       console.log(`Found ${imageArray.length} images for cache application`);
       
-      // Apply cache in background, don't wait
       imageArray.forEach(img => {
         const elementInfo = getElementInfo(img);
         browser.runtime.sendMessage({
@@ -186,7 +178,17 @@ function preloadCacheForExistingImages() {
   }
 }
 
-// Enhanced image observer for manga sites - REWRITTEN without setTimeout
+function cleanupOrphanedOverlays() {
+  const overlays = document.querySelectorAll('[data-overlay-for]');
+  overlays.forEach(overlay => {
+    const overlayFor = overlay.dataset.overlayFor;
+    const imgExists = document.querySelector(`img[src*="${overlayFor.split('_').slice(-1).join('_')}"]`);
+    if (!imgExists) {
+      overlay.remove();
+    }
+  });
+}
+
 function setupEnhancedImageObserver() {
   console.log('Setting up enhanced image observer');
   
@@ -242,7 +244,6 @@ function setupEnhancedImageObserver() {
       const matchingImages = newImages.filter(img => img.matches(currentSelector));
       
       if (matchingImages.length > 0) {
-        // Apply cache in background (non-blocking)
         matchingImages.forEach(img => {
           const elementInfo = getElementInfo(img);
           browser.runtime.sendMessage({
@@ -252,7 +253,6 @@ function setupEnhancedImageObserver() {
           }).catch(() => {});
         });
         
-        // Queue for translation if auto-translate enabled
         if (autoTranslateEnabled) {
           matchingImages.forEach(img => {
             queueImageForTranslation(img);
@@ -274,11 +274,9 @@ function setupEnhancedImageObserver() {
   console.log('Enhanced image observer started');
 }
 
-// Setup page change observer for SPA sites
 function setupPageChangeObserver() {
   console.log('Setting up page change observer');
   
-  // Observe URL changes
   let lastUrl = location.href;
   
   pageChangeObserver = new MutationObserver(() => {
@@ -287,14 +285,14 @@ function setupPageChangeObserver() {
       lastUrl = url;
       console.log('Page URL changed:', url);
       
-      // Scan for existing images immediately (no setTimeout)
+      cleanupOrphanedOverlays();
+      
       if (autoTranslateEnabled) {
         scanExistingImages();
       }
     }
   });
   
-  // Observe title changes as well (often indicates page change in SPAs)
   const titleElement = document.querySelector('title');
   if (titleElement) {
     pageChangeObserver.observe(titleElement, {
@@ -303,9 +301,19 @@ function setupPageChangeObserver() {
     });
   }
   
-  // Also listen to popstate events (browser navigation)
   window.addEventListener('popstate', () => {
     console.log('Popstate event detected');
+    cleanupOrphanedOverlays();
+    
+    if (autoTranslateEnabled) {
+      scanExistingImages();
+    }
+  });
+  
+  window.addEventListener('pagechange', () => {
+    console.log('Page change event detected');
+    cleanupOrphanedOverlays();
+    
     if (autoTranslateEnabled) {
       scanExistingImages();
     }
@@ -314,18 +322,15 @@ function setupPageChangeObserver() {
   console.log('Page change observer started');
 }
 
-// Setup lazy loading observer for individual images
 function setupLazyLoadingObserver(img) {
   if (img.dataset.lazyObserverSetup) return;
   img.dataset.lazyObserverSetup = 'true';
   
-  // Create IntersectionObserver for lazy loading
   const lazyObserver = new IntersectionObserver((entries, observer) => {
     entries.forEach(entry => {
       if (entry.isIntersecting) {
         const img = entry.target;
         
-        // Check if image has data-src
         if (img.dataset.src && !img.src) {
           img.src = img.dataset.src;
         }
@@ -334,12 +339,10 @@ function setupLazyLoadingObserver(img) {
           img.src = img.dataset.lazySrc;
         }
         
-        // Check if image should be translated
         if (shouldProcessImage(img) && autoTranslateEnabled && img.matches(currentSelector)) {
           queueImageForTranslation(img);
         }
         
-        // Stop observing this image
         observer.unobserve(img);
       }
     });
@@ -348,7 +351,6 @@ function setupLazyLoadingObserver(img) {
   lazyObserver.observe(img);
 }
 
-// Scan existing images immediately (no setTimeout)
 function scanExistingImages() {
   if (!currentSelector) return;
   
@@ -356,7 +358,6 @@ function scanExistingImages() {
   translateImagesWithSelector(currentSelector);
 }
 
-// Start auto-translation
 function startAutoTranslation(selector = null) {
   if (selector) {
     currentSelector = selector;
@@ -378,14 +379,12 @@ function startAutoTranslation(selector = null) {
   scanExistingImages();
 }
 
-// Stop auto-translation
 function stopAutoTranslation() {
   autoTranslateEnabled = false;
   currentSelector = '';
   console.log('Auto-translation stopped');
 }
 
-// Translate images matching selector
 function translateImagesWithSelector(selector) {
   try {
     const images = document.querySelectorAll(selector);
@@ -407,29 +406,23 @@ function translateImagesWithSelector(selector) {
   }
 }
 
-// Check if image should be processed
 function shouldProcessImage(img) {
-  // Check if already processed using new attribute system
   if (img.dataset.miProcessed === 'true') {
     return false;
   }
   
-  // Check if image has valid source
   if (!img.src || !img.src.startsWith('http')) {
-    // Check for data-src (lazy loading)
     if (!img.dataset.src || !img.dataset.src.startsWith('http')) {
       return false;
     }
   }
   
-  // Check image size
   if (img.naturalWidth > 0 && img.naturalHeight > 0) {
     if (img.naturalWidth < 100 || img.naturalHeight < 100) {
       return false;
     }
   }
   
-  // Check if already in queue
   if (translationQueue.has(img)) {
     return false;
   }
@@ -437,66 +430,174 @@ function shouldProcessImage(img) {
   return true;
 }
 
-// Queue image for translation
 function queueImageForTranslation(img) {
   translationQueue.add(img);
   
-  // Add visual indicator only for manual translations
   if (!autoTranslateEnabled) {
     img.style.outline = '2px solid #4A90E2';
   }
   
-  // Process queue if not already processing
   if (!isProcessing) {
     processTranslationQueue();
   }
 }
 
-// Process translation queue
 async function processTranslationQueue() {
   if (translationQueue.size === 0) {
     isProcessing = false;
+    hideProcessIndicator();
     return;
   }
   
   isProcessing = true;
   
-  // Process images one by one with delay
+  updateProcessIndicator(`Translating ${translationQueue.size} image${translationQueue.size > 1 ? 's' : ''}...`, true, true);
+  
   for (const img of translationQueue) {
     try {
+      updateProcessIndicator(`Translating... (${translationQueue.size} remaining)`, true, true);
       await translateSingleImage(img);
       translationQueue.delete(img);
       
-      // Small delay between translations to avoid overwhelming the backend
       await new Promise(resolve => setTimeout(resolve, 300));
     } catch (error) {
       console.error('Error translating image:', error);
-      // Mark as processed even if failed
       markImageAsProcessed(img, 'error', error.message);
       translationQueue.delete(img);
     }
   }
   
   isProcessing = false;
+  updateProcessIndicator('All translations completed', true, false);
+  setTimeout(() => hideProcessIndicator(), 2000);
   
-  // Check if there are new images in queue
   if (translationQueue.size > 0) {
     processTranslationQueue();
   }
 }
 
-// Translate single image with improved error handling
+function createProcessIndicator() {
+  if (processIndicator) return;
+  
+  processIndicator = document.createElement('div');
+  processIndicator.id = 'comic-translator-indicator';
+  processIndicator.style.cssText = `
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 20px;
+    font-size: 12px;
+    z-index: 10000;
+    display: none;
+    align-items: center;
+    gap: 8px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    transition: opacity 0.3s ease;
+    max-width: 300px;
+  `;
+  
+  const spinner = document.createElement('div');
+  spinner.style.cssText = `
+    width: 12px;
+    height: 12px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top: 2px solid white;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  `;
+  
+  const style = document.createElement('style');
+  style.textContent = `
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  `;
+  document.head.appendChild(style);
+  
+  const text = document.createElement('span');
+  text.id = 'comic-translator-indicator-text';
+  text.textContent = 'Processing...';
+  
+  const closeBtn = document.createElement('span');
+  closeBtn.innerHTML = '×';
+  closeBtn.style.cssText = `
+    margin-left: 8px;
+    cursor: pointer;
+    font-size: 16px;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+  `;
+  closeBtn.addEventListener('mouseenter', () => {
+    closeBtn.style.opacity = '1';
+  });
+  closeBtn.addEventListener('mouseleave', () => {
+    closeBtn.style.opacity = '0.7';
+  });
+  closeBtn.addEventListener('click', hideProcessIndicator);
+  
+  processIndicator.appendChild(spinner);
+  processIndicator.appendChild(text);
+  processIndicator.appendChild(closeBtn);
+  document.body.appendChild(processIndicator);
+}
+
+function updateProcessIndicator(text, show = true, persistent = false) {
+  if (!settings.showProcessIndicator) {
+    hideProcessIndicator();
+    return;
+  }
+  
+  if (!processIndicator) {
+    createProcessIndicator();
+  }
+  
+  const textElement = document.getElementById('comic-translator-indicator-text');
+  if (textElement) {
+    textElement.textContent = text || 'Processing...';
+  }
+  
+  if (show) {
+    processIndicator.style.display = 'flex';
+    indicatorAutoHide = !persistent;
+    
+    clearTimeout(processIndicator.hideTimeout);
+    
+    if (!persistent) {
+      processIndicator.hideTimeout = setTimeout(() => {
+        hideProcessIndicator();
+      }, 5000);
+    }
+  } else {
+    hideProcessIndicator();
+  }
+}
+
+function hideProcessIndicator() {
+  if (processIndicator) {
+    processIndicator.style.display = 'none';
+    clearTimeout(processIndicator.hideTimeout);
+  }
+}
+
 async function translateSingleImage(img) {
   console.log('Translating image:', img.src);
   
   const elementInfo = getElementInfo(img);
   
+  updateProcessIndicator('Translating...', true, true);
+  
   return new Promise((resolve, reject) => {
-    // Set a timeout to prevent hanging
     const timeoutId = setTimeout(() => {
       markImageAsProcessed(img, 'error', 'Translation timeout');
+      updateProcessIndicator('Translation timeout', true, false);
+      setTimeout(() => hideProcessIndicator(), 3000);
       reject(new Error('Translation timeout'));
-    }, 60000); // 60 seconds timeout
+    }, 60000);
     
     browser.runtime.sendMessage({
       action: 'translateImage',
@@ -504,47 +605,41 @@ async function translateSingleImage(img) {
       imageElement: elementInfo
     }).then(response => {
       clearTimeout(timeoutId);
-      // Remove visual indicator
       img.style.outline = '';
-      // Mark as successfully processed
+      updateProcessIndicator('Translation completed', true, false);
+      setTimeout(() => hideProcessIndicator(), 2000);
       markImageAsProcessed(img, 'ok');
       resolve(response);
     }).catch(error => {
       clearTimeout(timeoutId);
-      // Remove visual indicator
       img.style.outline = '';
-      // Mark as processed with error
+      updateProcessIndicator('Translation failed', true, false);
+      setTimeout(() => hideProcessIndicator(), 3000);
       markImageAsProcessed(img, 'error', error.message);
-      // Log error but don't throw
       console.warn('Translation failed for image:', img.src, 'Error:', error.message);
-      resolve(null); // Resolve with null instead of rejecting
+      resolve(null);
     });
   });
 }
 
-// Mark image as processed with status
 function markImageAsProcessed(img, status, errorMessage = '') {
   img.dataset.miProcessed = 'true';
   img.dataset.miStatus = status;
   
   if (status === 'error' && errorMessage) {
-    img.dataset.miError = errorMessage.substring(0, 100); // Limit error message length
+    img.dataset.miError = errorMessage.substring(0, 100);
     console.warn(`Image marked as processed with error: ${img.src} - ${errorMessage}`);
   } else if (status === 'ok') {
     console.log(`Image successfully processed: ${img.src}`);
   }
 }
 
-// Listen for messages from background script
 browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'replaceImage') {
     replaceImageElement(message.imageUrl, message.imageElement, message.originalImageUrl);
   } else if (message.action === 'overlayText') {
     overlayTextBoxes(message.textRegions, message.imageElement, message.originalImageUrl, message.cleanedImageUrl);
-  } else if (message.action === 'showBatchSelectorDialog') {
-    showBatchSelectorDialog();
   } else if (message.action === 'reloadSettings') {
-    // Reload settings and re-setup features
     if (message.settings) {
       settings = message.settings;
     } else {
@@ -563,17 +658,19 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
   } else if (message.action === 'stopAutoTranslate') {
     stopAutoTranslation();
   } else if (message.action === 'markImageProcessed') {
-    // Handle mark image processed message from background script
     const element = findElementByUrl(message.originalImageUrl);
     if (element) {
       markImageAsProcessed(element, message.status, message.error);
     }
+  } else if (message.action === 'updateProcessIndicator') {
+    updateProcessIndicator(message.text);
+  } else if (message.action === 'hideProcessIndicator') {
+    hideProcessIndicator();
   }
   
-  return true; // Keep message channel open for async response
+  return true;
 });
 
-// Add visual feedback for images that can be translated
 document.addEventListener('contextmenu', (e) => {
   if (e.target.tagName === 'IMG') {
     e.target.style.outline = '2px solid #4A90E2';
@@ -583,14 +680,12 @@ document.addEventListener('contextmenu', (e) => {
   }
 });
 
-// Track selected image for keyboard shortcut
 document.addEventListener('mouseenter', (e) => {
   if (e.target.tagName === 'IMG') {
     selectedImage = e.target;
   }
 }, true);
 
-// Keyboard shortcut handler (Alt+T)
 document.addEventListener('keydown', (e) => {
   if (e.altKey && e.key.toLowerCase() === 't') {
     if (selectedImage) {
@@ -598,194 +693,7 @@ document.addEventListener('keydown', (e) => {
       translateSelectedImage();
     }
   }
-  
-  // Shift+Alt+T for batch translation
-  if (e.shiftKey && e.altKey && e.key.toLowerCase() === 't') {
-    e.preventDefault();
-    translateBatchImages();
-  }
 });
-
-// Show batch selector dialog
-function showBatchSelectorDialog() {
-  // Remove existing dialog
-  const existingDialog = document.getElementById('manga-translator-batch-dialog');
-  if (existingDialog) {
-    existingDialog.remove();
-  }
-  
-  // Create dialog container
-  const dialog = document.createElement('div');
-  dialog.id = 'manga-translator-batch-dialog';
-  dialog.style.cssText = `
-    position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    background: white;
-    padding: 20px;
-    border-radius: 8px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-    z-index: 100000;
-    min-width: 400px;
-    max-width: 600px;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  `;
-  
-  dialog.innerHTML = `
-    <h3 style="margin: 0 0 15px 0; color: #333;">Batch Translate Images</h3>
-    <label style="display: block; margin-bottom: 8px; font-weight: 600; color: #555;">
-      CSS Selector (one per line):
-    </label>
-    <textarea 
-      id="batch-selector-textarea" 
-      style="width: 100%; height: 120px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; resize: vertical; font-family: monospace; font-size: 12px;"
-      placeholder="img.manga-image&#10;.comic-panel img&#10;[name="image-item"] img&#10;.chapter img"
-    >[name="image-item"] img</textarea>
-    <div style="margin-top: 10px; font-size: 11px; color: #777;">
-      Enter CSS selectors to target images for translation. One selector per line.<br>
-      Images matching these selectors will be translated immediately.
-    </div>
-    <div style="margin-top: 15px; display: flex; gap: 10px;">
-      <button 
-        id="batch-translate-btn" 
-        style="flex: 1; padding: 10px; background: #4A90E2; color: white; border: none; border-radius: 4px; font-weight: 600; cursor: pointer;"
-      >
-        Translate Now
-      </button>
-      <button 
-        id="batch-cancel-btn" 
-        style="flex: 1; padding: 10px; background: #f0f0f0; color: #333; border: none; border-radius: 4px; font-weight: 600; cursor: pointer;"
-      >
-        Cancel
-      </button>
-    </div>
-  `;
-  
-  // Add backdrop
-  const backdrop = document.createElement('div');
-  backdrop.style.cssText = `
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0,0,0,0.5);
-    z-index: 99999;
-  `;
-  
-  document.body.appendChild(backdrop);
-  document.body.appendChild(dialog);
-  
-  // Focus on textarea
-  setTimeout(() => {
-    document.getElementById('batch-selector-textarea').focus();
-  }, 100);
-  
-  // Handle translate button
-  document.getElementById('batch-translate-btn').addEventListener('click', () => {
-    const selectors = document.getElementById('batch-selector-textarea').value
-      .split('\n')
-      .map(s => s.trim())
-      .filter(s => s.length > 0);
-    
-    if (selectors.length === 0) {
-      alert('Please enter at least one CSS selector');
-      return;
-    }
-    
-    // Close dialog
-    dialog.remove();
-    backdrop.remove();
-    
-    // Translate images with each selector
-    selectors.forEach(selector => {
-      console.log('Translating images with selector:', selector);
-      translateImagesWithSelector(selector);
-    });
-  });
-  
-  // Handle cancel button and backdrop click
-  const cancelDialog = () => {
-    dialog.remove();
-    backdrop.remove();
-  };
-  
-  document.getElementById('batch-cancel-btn').addEventListener('click', cancelDialog);
-  backdrop.addEventListener('click', cancelDialog);
-  
-  // Prevent dialog close when clicking inside dialog
-  dialog.addEventListener('click', (e) => {
-    e.stopPropagation();
-  });
-}
-
-// Add hover button to image
-function addHoverButton(img) {
-  // Check if hover button already exists
-  if (img.dataset.hasHoverButton) return;
-  img.dataset.hasHoverButton = 'true';
-  
-  const hoverButton = document.createElement('div');
-  hoverButton.innerHTML = '🌐';
-  hoverButton.className = 'manga-translator-hover-btn';
-  hoverButton.style.cssText = `
-    position: absolute;
-    background: #4A90E2;
-    color: white;
-    border: none;
-    border-radius: 50%;
-    width: 32px;
-    height: 32px;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    font-size: 16px;
-    z-index: 10000;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-    transition: transform 0.2s;
-    pointer-events: auto;
-  `;
-  
-  hoverButton.addEventListener('mouseenter', () => {
-    hoverButton.style.transform = 'scale(1.1)';
-  });
-  
-  hoverButton.addEventListener('mouseleave', () => {
-    hoverButton.style.transform = 'scale(1)';
-  });
-  
-  hoverButton.addEventListener('click', (e) => {
-    e.stopPropagation();
-    selectedImage = img;
-    translateSelectedImage();
-    hoverButton.style.display = 'none';
-  });
-  
-  // Add hover events to image
-  img.addEventListener('mouseenter', () => {
-    if (autoTranslateEnabled && currentSelector && img.matches(currentSelector)) {
-      // Don't show hover button for auto-translated images
-      return;
-    }
-    
-    if (img.naturalWidth > 200 && img.naturalHeight > 100) {
-      const rect = img.getBoundingClientRect();
-      hoverButton.style.display = 'flex';
-      hoverButton.style.left = `${rect.right - 40 + window.scrollX}px`;
-      hoverButton.style.top = `${rect.top + 8 + window.scrollY}px`;
-    }
-  });
-  
-  img.addEventListener('mouseleave', () => {
-    setTimeout(() => {
-      hoverButton.style.display = 'none';
-    }, 100);
-  });
-  
-  document.body.appendChild(hoverButton);
-}
 
 function translateSelectedImage() {
   if (!selectedImage) return;
@@ -793,13 +701,14 @@ function translateSelectedImage() {
   const imageUrl = selectedImage.src;
   
   if (imageUrl && imageUrl.startsWith('http')) {
-    // Skip if already processed
     if (selectedImage.dataset.miProcessed === 'true') {
       console.log('Skipping already processed image');
       return;
     }
     
     const elementInfo = getElementInfo(selectedImage);
+    
+    updateProcessIndicator('Translating selected image...', true, true);
     
     browser.runtime.sendMessage({
       action: 'translateImage',
@@ -809,7 +718,6 @@ function translateSelectedImage() {
   }
 }
 
-// Get serializable element info
 function getElementInfo(element) {
   const rect = element.getBoundingClientRect();
   return {
@@ -831,7 +739,6 @@ function generateElementUID(element) {
   return `img_${element.src.slice(-20)}_${element.offsetTop}_${element.offsetLeft}`;
 }
 
-// Find element by UID
 function findElementByUID(uid) {
   const images = document.querySelectorAll('img');
   for (const img of images) {
@@ -842,7 +749,6 @@ function findElementByUID(uid) {
   return null;
 }
 
-// Find element by image URL
 function findElementByUrl(url) {
   const images = document.querySelectorAll('img');
   for (const img of images) {
@@ -853,7 +759,6 @@ function findElementByUrl(url) {
   return null;
 }
 
-// Replace image in page
 function replaceImageElement(newImageUrl, elementInfo, originalImageUrl) {
   let element;
   
@@ -877,7 +782,6 @@ function replaceImageElement(newImageUrl, elementInfo, originalImageUrl) {
     element.src = newImageUrl;
     element.style.opacity = '1';
     
-    // Mark as processed
     markImageAsProcessed(element, 'ok');
     element.style.border = '2px solid #4A90E2';
     
@@ -887,7 +791,6 @@ function replaceImageElement(newImageUrl, elementInfo, originalImageUrl) {
   }, 300);
 }
 
-// Overlay text boxes on image
 function overlayTextBoxes(textRegions, elementInfo, originalImageUrl, cleanedImageUrl = null) {
   let element;
   
@@ -904,7 +807,6 @@ function overlayTextBoxes(textRegions, elementInfo, originalImageUrl, cleanedIma
     return;
   }
   
-  // Wait for image to be fully loaded and visible
   waitForImageReady(element).then(() => {
     createOverlayForImage(element, textRegions, elementInfo, originalImageUrl, cleanedImageUrl);
   }).catch(error => {
@@ -912,12 +814,9 @@ function overlayTextBoxes(textRegions, elementInfo, originalImageUrl, cleanedIma
   });
 }
 
-// New function to wait for image to be ready
 function waitForImageReady(img) {
   return new Promise((resolve, reject) => {
-    // Check if image is already loaded and has dimensions
     if (img.complete && img.naturalWidth > 0 && img.naturalHeight > 0) {
-      // Check if element has rendered dimensions
       const rect = img.getBoundingClientRect();
       if (rect.width > 0 && rect.height > 0) {
         resolve();
@@ -925,10 +824,8 @@ function waitForImageReady(img) {
       }
     }
     
-    // Wait for load event
     const handleLoad = () => {
       cleanup();
-      // Double check dimensions after load
       checkDimensions();
     };
     
@@ -942,7 +839,6 @@ function waitForImageReady(img) {
       if (rect.width > 0 && rect.height > 0) {
         resolve();
       } else {
-        // Use IntersectionObserver if dimensions still not available
         observeVisibility();
       }
     };
@@ -959,10 +855,9 @@ function waitForImageReady(img) {
       
       observer.observe(img);
       
-      // Fallback timeout
       setTimeout(() => {
         observer.disconnect();
-        resolve(); // Resolve anyway after timeout
+        resolve();
       }, 5000);
     };
     
@@ -974,7 +869,6 @@ function waitForImageReady(img) {
     img.addEventListener('load', handleLoad);
     img.addEventListener('error', handleError);
     
-    // If image is already complete but failed earlier checks, try intersection observer
     if (img.complete) {
       cleanup();
       checkDimensions();
@@ -983,7 +877,6 @@ function waitForImageReady(img) {
 }
 
 function createOverlayForImage(element, textRegions, elementInfo, originalImageUrl, cleanedImageUrl) {
-  // Remove existing overlays
   const existingOverlay = document.querySelector(`[data-overlay-for="${elementInfo ? elementInfo.uid : originalImageUrl}"]`);
   if (existingOverlay) {
     existingOverlay.remove();
@@ -991,10 +884,8 @@ function createOverlayForImage(element, textRegions, elementInfo, originalImageU
   
   const rect = element.getBoundingClientRect();
   
-  // Final check for valid dimensions
   if (rect.width === 0 || rect.height === 0) {
     console.warn('Image still has no dimensions, retrying...', originalImageUrl);
-    // Retry after a short delay
     setTimeout(() => {
       const newRect = element.getBoundingClientRect();
       if (newRect.width > 0 && newRect.height > 0) {
@@ -1006,6 +897,7 @@ function createOverlayForImage(element, textRegions, elementInfo, originalImageU
   
   const overlayContainer = document.createElement('div');
   overlayContainer.dataset.overlayFor = elementInfo ? elementInfo.uid : originalImageUrl;
+  overlayContainer.dataset.originalImageUrl = originalImageUrl;
   overlayContainer.style.cssText = `
     position: absolute;
     left: ${rect.left + window.scrollX}px;
@@ -1057,7 +949,6 @@ function createOverlayForImage(element, textRegions, elementInfo, originalImageU
   
   document.body.appendChild(overlayContainer);
   
-  // Update position on scroll/resize
   const updatePosition = () => {
     const newRect = element.getBoundingClientRect();
     if (newRect.width > 0 && newRect.height > 0) {
@@ -1065,6 +956,8 @@ function createOverlayForImage(element, textRegions, elementInfo, originalImageU
       overlayContainer.style.top = `${newRect.top + window.scrollY}px`;
       overlayContainer.style.width = `${newRect.width}px`;
       overlayContainer.style.height = `${newRect.height}px`;
+    } else {
+      overlayContainer.remove();
     }
   };
   
@@ -1078,28 +971,22 @@ function createOverlayForImage(element, textRegions, elementInfo, originalImageU
   }, 2000);
 }
 
-// Create individual text box
 function createTextBox(region, imgRect, imgElement) {
   const box = document.createElement('div');
   
-  // Get natural image dimensions for accurate scaling
   const naturalWidth = imgElement.naturalWidth;
   const naturalHeight = imgElement.naturalHeight;
   
-  // Calculate position and size relative to image
   const x = (region.x / naturalWidth) * imgRect.width;
   const y = (region.y / naturalHeight) * imgRect.height;
   const width = (region.width / naturalWidth) * imgRect.width;
   const height = (region.height / naturalHeight) * imgRect.height;
   
-  // Apply rotation if needed
   const transform = region.angle && region.angle !== 0 ? `rotate(${region.angle}deg)` : 'none';
   
-  // Determine text and background colors
   let textColor;
   let backgroundColor;
   
-  // Helper function to calculate brightness
   const getBrightness = (rgbString) => {
     const rgb = rgbString.match(/\d+/g);
     if (rgb && rgb.length >= 3) {
@@ -1111,26 +998,18 @@ function createTextBox(region, imgRect, imgElement) {
     return 128;
   };
   
-  // Get original colors from backend
   const originalFgColor = region.fg_color || 'rgb(0,0,0)';
   const originalBgColor = region.bg_color || 'rgb(255,255,255)';
   const fgBrightness = getBrightness(originalFgColor);
   const bgBrightness = getBrightness(originalBgColor);
   
-  // Determine colors based on settings
   if (settings.overlayTextColor === 'auto') {
-    // Use original colors from backend detection
     textColor = originalFgColor;
     
-    // For colored mode, use inverted background for contrast
     if (settings.overlayMode === 'colored') {
-      // If original text was dark on light background, use light background
-      // If original text was light on dark background, use dark background
       if (fgBrightness < 128) {
-        // Dark text -> use light background
         backgroundColor = `rgba(255, 255, 255, ${settings.overlayOpacity / 100})`;
       } else {
-        // Light text -> use dark background
         backgroundColor = `rgba(0, 0, 0, ${settings.overlayOpacity / 100})`;
       }
     }
@@ -1146,7 +1025,6 @@ function createTextBox(region, imgRect, imgElement) {
     }
   } else if (settings.overlayTextColor === 'custom') {
     textColor = settings.customTextColor;
-    // Determine background based on custom text color brightness
     const customBrightness = getBrightness(textColor);
     if (settings.overlayMode === 'colored') {
       if (customBrightness < 128) {
@@ -1157,7 +1035,6 @@ function createTextBox(region, imgRect, imgElement) {
     }
   }
   
-  // Build background style
   let backgroundStyle = '';
   if (settings.overlayMode === 'colored' && backgroundColor) {
     backgroundStyle = `background-color: ${backgroundColor}; border-radius: 4px; padding: 4px;`;
@@ -1185,9 +1062,7 @@ function createTextBox(region, imgRect, imgElement) {
     box-sizing: border-box;
   `;
   
-  // Add text shadow for better readability (except in cleaned mode)
   if (settings.overlayMode !== 'cleaned') {
-    // Use contrasting shadow based on text brightness
     const textBrightness = getBrightness(textColor);
     const shadowColor = textBrightness < 128 ? 'rgba(255,255,255,0.8)' : 'rgba(0,0,0,0.8)';
     box.style.textShadow = `
@@ -1201,7 +1076,6 @@ function createTextBox(region, imgRect, imgElement) {
   
   box.textContent = region.translated_text || region.text || '';
   
-  // Make draggable if enabled
   if (settings.draggableOverlay) {
     makeElementDraggable(box);
   }
@@ -1209,7 +1083,6 @@ function createTextBox(region, imgRect, imgElement) {
   return box;
 }
 
-// Make an element draggable
 function makeElementDraggable(element) {
   let pos1 = 0, pos2 = 0, pos3 = 0, pos4 = 0;
   
@@ -1249,7 +1122,6 @@ function makeElementDraggable(element) {
   }
 }
 
-// Initialize hover buttons for existing images
 function initializeHoverButtons() {
   const images = document.querySelectorAll('img');
   images.forEach(img => {
@@ -1257,8 +1129,70 @@ function initializeHoverButtons() {
   });
 }
 
-// Initialize on DOM content loaded
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('Manga Translator content script loaded');
+  console.log('Comic Translator content script loaded');
   console.log('Current settings:', settings);
 });
+
+function addHoverButton(img) {
+  if (img.dataset.hasHoverButton) return;
+  img.dataset.hasHoverButton = 'true';
+  
+  const hoverButton = document.createElement('div');
+  hoverButton.innerHTML = '🌐';
+  hoverButton.className = 'comic-translator-hover-btn';
+  hoverButton.style.cssText = `
+    position: absolute;
+    background: #4A90E2;
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 16px;
+    z-index: 10000;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    transition: transform 0.2s;
+    pointer-events: auto;
+  `;
+  
+  hoverButton.addEventListener('mouseenter', () => {
+    hoverButton.style.transform = 'scale(1.1)';
+  });
+  
+  hoverButton.addEventListener('mouseleave', () => {
+    hoverButton.style.transform = 'scale(1)';
+  });
+  
+  hoverButton.addEventListener('click', (e) => {
+    e.stopPropagation();
+    selectedImage = img;
+    translateSelectedImage();
+    hoverButton.style.display = 'none';
+  });
+  
+  img.addEventListener('mouseenter', () => {
+    if (autoTranslateEnabled && currentSelector && img.matches(currentSelector)) {
+      return;
+    }
+    
+    if (img.naturalWidth > 200 && img.naturalHeight > 100) {
+      const rect = img.getBoundingClientRect();
+      hoverButton.style.display = 'flex';
+      hoverButton.style.left = `${rect.right - 40 + window.scrollX}px`;
+      hoverButton.style.top = `${rect.top + 8 + window.scrollY}px`;
+    }
+  });
+  
+  img.addEventListener('mouseleave', () => {
+    setTimeout(() => {
+      hoverButton.style.display = 'none';
+    }, 100);
+  });
+  
+  document.body.appendChild(hoverButton);
+}

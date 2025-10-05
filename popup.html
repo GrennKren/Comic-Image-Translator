@@ -3,14 +3,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Manga Translator</title>
+  <title>Comic Translator</title>
   <style>
     body {
-      width: 350px;
+      width: auto;
       padding: 15px;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
       margin: 0;
+      box-sizing: border-box;
+      overflow-x: hidden;
     }
+
     
     h2 {
       margin: 0 0 15px 0;
@@ -96,20 +99,53 @@
       font-style: italic;
     }
     
-    .section {
-      padding: 12px;
-      background-color: #f9f9f9;
+    .collapsible {
+      background: #f9f9f9;
+      border: 1px solid #ddd;
       border-radius: 4px;
-      margin-bottom: 15px;
+      margin-bottom: 10px;
+      overflow: hidden;
     }
     
-    .section-title {
+    .collapsible-header {
+      background: #f0f0f0;
+      padding: 12px;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      user-select: none;
+      transition: background-color 0.2s;
+    }
+    
+    .collapsible-header:hover {
+      background: #e8e8e8;
+    }
+    
+    .collapsible-header h3 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 600;
+      color: #333;
+    }
+    
+    .collapsible-arrow {
+      transition: transform 0.3s;
       font-size: 12px;
-      font-weight: 700;
       color: #666;
-      margin-bottom: 10px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
+    }
+    
+    .collapsible-arrow.open {
+      transform: rotate(180deg);
+    }
+    
+    .collapsible-content {
+      padding: 15px;
+      display: none;
+    }
+    
+    .collapsible-content.open {
+      display: block;
     }
     
     .status {
@@ -133,9 +169,6 @@
       border: 1px solid #f5c6cb;
     }
     
-    #overlaySettings {
-      display: none;
-    }
     
     .cache-info {
       font-size: 11px;
@@ -152,228 +185,350 @@
       margin-top: 5px;
       font-weight: 600;
     }
+    
+    .priority-badge {
+      background: #4A90E2;
+      color: white;
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 10px;
+      margin-left: 8px;
+    }
   </style>
 </head>
 <body>
-  <h2>🎌 Manga Translator</h2>
+  <h2>🌐 Comic Translator</h2>
   
-  <div class="section">
-    <div class="section-title">Backend Configuration</div>
-    <div class="setting-group">
-      <label for="backendUrl">Backend URL:</label>
-      <input type="text" id="backendUrl" placeholder="http://127.0.0.1:8000">
-      <div class="info">Manga-image-translator server address</div>
+  <!-- Basic Settings (Always Expanded) -->
+  <div class="collapsible">
+    <div class="collapsible-header" onclick="toggleCollapsible(this)">
+      <h3>🔧 Basic Settings <span class="priority-badge">Priority</span></h3>
+      <span class="collapsible-arrow open">▼</span>
     </div>
-  </div>
-  
-  <div class="section">
-    <div class="section-title">Display Mode</div>
-    <div class="setting-group">
-      <label for="displayMode">Translation Display:</label>
-      <select id="displayMode">
-        <option value="overlay">Overlay Text (on page)</option>
-        <option value="replace">Replace Image (on page)</option>
-        <option value="download">Open in New Tab</option>
-      </select>
-      <div class="info">How to display translated results</div>
-    </div>
-  </div>
-  
-  <div class="section" id="overlaySettings">
-    <div class="section-title">Overlay Settings</div>
-    
-    <div class="setting-group">
-      <label for="overlayMode">Overlay Background:</label>
-      <select id="overlayMode">
-        <option value="colored">Colored Background (Recommended)</option>
-        <option value="cleaned">Clean Original Background</option>
-      </select>
-      <div class="info">
-        Colored: Uses colored background for readability<br>
-        Clean: Removes original text from image
+    <div class="collapsible-content open">
+      <div class="setting-group">
+        <label for="backendUrl">Backend URL:</label>
+        <input type="text" id="backendUrl" placeholder="http://127.0.0.1:8000">
+        <div class="info">Comic-image-translator server address</div>
+      </div>
+      
+      <div class="setting-group">
+        <label for="translator">Translator:</label>
+        <select id="translator">
+          <optgroup label="Offline (No API Key)">
+            <option value="offline">Offline (Auto)</option>
+            <option value="sugoi" selected>Sugoi (JPN→ENG)</option>
+            <option value="nllb">NLLB</option>
+            <option value="nllb_big">NLLB Big</option>
+            <option value="jparacrawl">JParaCrawl (JPN)</option>
+            <option value="jparacrawl_big">JParaCrawl Big</option>
+            <option value="m2m100">M2M100 (Multilingual)</option>
+            <option value="m2m100_big">M2M100 Big</option>
+            <option value="mbart50">mBART50</option>
+            <option value="qwen2">Qwen2</option>
+            <option value="qwen2_big">Qwen2 Big</option>
+          </optgroup>
+          <optgroup label="Online (API Key Required)">
+            <option value="chatgpt">ChatGPT (OpenAI)</option>
+            <option value="deepl">DeepL</option>
+            <option value="baidu">Baidu</option>
+            <option value="youdao">Youdao</option>
+            <option value="papago">Papago</option>
+            <option value="caiyun">Caiyun</option>
+            <option value="sakura">Sakura</option>
+            <option value="deepseek">DeepSeek</option>
+            <option value="groq">Groq</option>
+            <option value="gemini">Gemini</option>
+            <option value="custom_openai">Custom OpenAI</option>
+          </optgroup>
+          <optgroup label="Other">
+            <option value="none">None (Remove text only)</option>
+            <option value="original">Original (Keep text)</option>
+          </optgroup>
+        </select>
+        <div class="info">Offline translators don't need API keys</div>
+      </div>
+      
+      <div class="setting-group">
+        <label for="targetLang">Target Language:</label>
+        <select id="targetLang">
+          <option value="ENG" selected>English</option>
+          <option value="CHS">Chinese (Simplified)</option>
+          <option value="CHT">Chinese (Traditional)</option>
+          <option value="JPN">Japanese</option>
+          <option value="KOR">Korean</option>
+          <option value="VIN">Vietnamese</option>
+          <option value="CSY">Czech</option>
+          <option value="NLD">Dutch</option>
+          <option value="FRA">French</option>
+          <option value="DEU">German</option>
+          <option value="HUN">Hungarian</option>
+          <option value="ITA">Italian</option>
+          <option value="POL">Polish</option>
+          <option value="PTB">Portuguese (Brazilian)</option>
+          <option value="ROM">Romanian</option>
+          <option value="RUS">Russian</option>
+          <option value="ESP">Spanish</option>
+          <option value="TRK">Turkish</option>
+          <option value="UKR">Ukrainian</option>
+          <option value="ARA">Arabic</option>
+          <option value="SRP">Serbian</option>
+          <option value="HRV">Croatian</option>
+          <option value="THA">Thai</option>
+          <option value="IND">Indonesian</option>
+          <option value="FIL">Filipino</option>
+        </select>
+      </div>
+      
+      <div class="setting-group">
+        <label for="displayMode">Display Mode:</label>
+        <select id="displayMode">
+          <option value="overlay">Overlay Text (on page)</option>
+          <option value="replace">Replace Image (on page)</option>
+          <option value="download">Open in New Tab</option>
+        </select>
+        <div class="info">How to display translated results</div>
+      </div>
+      
+      <div class="setting-group">
+        <label for="showProcessIndicator">Show Process Indicator:</label>
+        <select id="showProcessIndicator">
+          <option value="true" selected>Enabled</option>
+          <option value="false">Disabled</option>
+        </select>
+        <div class="info">
+          Shows translation progress indicator in bottom-right corner
+        </div>
       </div>
     </div>
-    
-    <div class="setting-group">
-      <label for="overlayOpacity">Background Opacity:</label>
-      <input type="range" id="overlayOpacity" min="0" max="100" value="90">
-      <div class="info">Transparency level for colored background (0-100%)</div>
+  </div>
+  
+    <!-- Overlay Settings -->
+  <div class="collapsible" id="overlaySettings">
+    <div class="collapsible-header" onclick="toggleCollapsible(this)">
+      <h3>🎨 Overlay Settings</h3>
+      <span class="collapsible-arrow">▼</span>
     </div>
-    
-    <div class="setting-group">
-      <label for="overlayTextColor">Text Color:</label>
-      <select id="overlayTextColor">
-        <option value="auto">Auto (from detection)</option>
-        <option value="white">White</option>
-        <option value="black">Black</option>
-        <option value="custom">Custom</option>
-      </select>
-    </div>
-    
-    <div class="setting-group" id="customColorGroup" style="display: none;">
-      <label for="customTextColor">Custom Text Color:</label>
-      <input type="color" id="customTextColor" value="#ffffff">
-    </div>
-    
-    <div class="setting-group checkbox-group">
-      <input type="checkbox" id="draggableOverlay">
-      <label for="draggableOverlay" style="margin: 0;">Enable Draggable Text Boxes</label>
+    <div class="collapsible-content">
+      <div class="setting-group">
+        <label for="overlayMode">Overlay Background:</label>
+        <select id="overlayMode">
+          <option value="colored">Colored Background (Recommended)</option>
+          <option value="cleaned">Clean Original Background</option>
+        </select>
+        <div class="info">
+          Colored: Uses colored background for readability<br>
+          Clean: Removes original text from image
+        </div>
+      </div>
+      
+      <div class="setting-group">
+        <label for="overlayOpacity">Background Opacity:</label>
+        <input type="range" id="overlayOpacity" min="0" max="100" value="90">
+        <div class="info">Transparency level for colored background (0-100%)</div>
+      </div>
+      
+      <div class="setting-group">
+        <label for="overlayTextColor">Text Color:</label>
+        <select id="overlayTextColor">
+          <option value="auto">Auto (from detection)</option>
+          <option value="white">White</option>
+          <option value="black">Black</option>
+          <option value="custom">Custom</option>
+        </select>
+      </div>
+      
+      <div class="setting-group" id="customColorGroup" style="display: none;">
+        <label for="customTextColor">Custom Text Color:</label>
+        <input type="color" id="customTextColor" value="#ffffff">
+      </div>
+      
+      <div class="setting-group checkbox-group">
+        <input type="checkbox" id="draggableOverlay">
+        <label for="draggableOverlay" style="margin: 0;">Enable Draggable Text Boxes</label>
+      </div>
+      
+      <div class="setting-group">
+        <label for="fontSizeOffset">Font Size Offset:</label>
+        <input type="range" id="fontSizeOffset" min="-10" max="10" value="0">
+        <div class="info">Adjust font size (-10 smaller, +10 larger)</div>
+      </div>
     </div>
   </div>
   
-  <div class="section">
-    <div class="section-title">Cache Settings</div>
-    <div class="setting-group checkbox-group">
-      <input type="checkbox" id="enableCache">
-      <label for="enableCache" style="margin: 0;">Enable Translation Cache</label>
+  <!-- Auto-Translation Settings -->
+  <div class="collapsible">
+    <div class="collapsible-header" onclick="toggleCollapsible(this)">
+      <h3>🤖 Auto-Translation</h3>
+      <span class="collapsible-arrow">▼</span>
     </div>
-    <div class="info">Cache translations to avoid reprocessing same images</div>
-    <div class="cache-info" id="cacheInfo">Cache size: 0 entries</div>
-    <div class="setting-group">
-      <button class="btn-secondary" id="clearCache">Clear Cache</button>
-    </div>
-  </div>
-  
-  <div class="section">
-    <div class="section-title">Auto-Translation Settings</div>
-    <div class="setting-group">
-      <label>Manage CSS Selectors:</label>
-      <button class="btn-secondary" id="manageSelectorsBtn" style="width: 100%;">
-        Manage Selectors (Opens New Tab)
-      </button>
-      <div class="info">Configure domain-specific CSS selectors for auto-translation</div>
-    </div>
-    <div class="setting-group checkbox-group">
-      <input type="checkbox" id="enableBatchMode">
-      <label for="enableBatchMode" style="margin: 0;">Enable Auto-Translation</label>
-    </div>
-    <div class="info">When enabled, images matching configured selectors will be translated automatically</div>
-    <div class="auto-translate-status" id="autoTranslateStatus">Status: Disabled</div>
-    <div class="setting-group checkbox-group">
-      <input type="checkbox" id="skipProcessed">
-      <label for="skipProcessed" style="margin: 0;">Skip Already Processed Images</label>
-    </div>
-    <div class="setting-group checkbox-group">
-      <input type="checkbox" id="observeDynamicImages">
-      <label for="observeDynamicImages" style="margin: 0;">Observe Dynamically Loaded Images</label>
-    </div>
-    <div class="info">Watch for new images added to the page (recommended for manga sites)</div>
-  </div>
-  
-  <div class="section">
-    <div class="section-title">Translation Settings</div>
-    
-    <div class="setting-group">
-      <label for="translator">Translator:</label>
-      <select id="translator">
-        <optgroup label="Offline (No API Key)">
-          <option value="offline">Offline (Auto)</option>
-          <option value="sugoi" selected>Sugoi (JPN→ENG)</option>
-          <option value="nllb">NLLB</option>
-          <option value="nllb_big">NLLB Big</option>
-          <option value="jparacrawl">JParaCrawl (JPN)</option>
-          <option value="jparacrawl_big">JParaCrawl Big</option>
-          <option value="m2m100">M2M100 (Multilingual)</option>
-          <option value="m2m100_big">M2M100 Big</option>
-          <option value="mbart50">mBART50</option>
-          <option value="qwen2">Qwen2</option>
-          <option value="qwen2_big">Qwen2 Big</option>
-        </optgroup>
-        <optgroup label="Online (API Key Required)">
-          <option value="chatgpt">ChatGPT (OpenAI)</option>
-          <option value="deepl">DeepL</option>
-          <option value="baidu">Baidu</option>
-          <option value="youdao">Youdao</option>
-          <option value="papago">Papago</option>
-          <option value="caiyun">Caiyun</option>
-          <option value="sakura">Sakura</option>
-          <option value="deepseek">DeepSeek</option>
-          <option value="groq">Groq</option>
-          <option value="gemini">Gemini</option>
-          <option value="custom_openai">Custom OpenAI</option>
-        </optgroup>
-        <optgroup label="Other">
-          <option value="none">None (Remove text only)</option>
-          <option value="original">Original (Keep text)</option>
-        </optgroup>
-      </select>
-      <div class="info">Offline translators don't need API keys</div>
-    </div>
-    
-    <div class="setting-group">
-      <label for="targetLang">Target Language:</label>
-      <select id="targetLang">
-        <option value="ENG" selected>English</option>
-        <option value="CHS">Chinese (Simplified)</option>
-        <option value="CHT">Chinese (Traditional)</option>
-        <option value="JPN">Japanese</option>
-        <option value="KOR">Korean</option>
-        <option value="VIN">Vietnamese</option>
-        <option value="CSY">Czech</option>
-        <option value="NLD">Dutch</option>
-        <option value="FRA">French</option>
-        <option value="DEU">German</option>
-        <option value="HUN">Hungarian</option>
-        <option value="ITA">Italian</option>
-        <option value="POL">Polish</option>
-        <option value="PTB">Portuguese (Brazilian)</option>
-        <option value="ROM">Romanian</option>
-        <option value="RUS">Russian</option>
-        <option value="ESP">Spanish</option>
-        <option value="TRK">Turkish</option>
-        <option value="UKR">Ukrainian</option>
-        <option value="ARA">Arabic</option>
-        <option value="SRP">Serbian</option>
-        <option value="HRV">Croatian</option>
-        <option value="THA">Thai</option>
-        <option value="IND">Indonesian</option>
-        <option value="FIL">Filipino</option>
-      </select>
+    <div class="collapsible-content">
+      <div class="setting-group">
+        <label>Manage CSS Selectors:</label>
+        <button class="btn-secondary" id="manageSelectorsBtn" style="width: 100%;">
+          Manage Selectors (Opens New Tab)
+        </button>
+        <div class="info">Configure domain-specific CSS selectors for auto-translation</div>
+      </div>
+      
+      <div class="setting-group checkbox-group">
+        <input type="checkbox" id="enableBatchMode">
+        <label for="enableBatchMode" style="margin: 0;">Enable Auto-Translation</label>
+      </div>
+      <div class="info">When enabled, images matching configured selectors will be translated automatically</div>
+      <div class="auto-translate-status" id="autoTranslateStatus">Status: Disabled</div>
+      
+      <div class="setting-group checkbox-group">
+        <input type="checkbox" id="skipProcessed">
+        <label for="skipProcessed" style="margin: 0;">Skip Already Processed Images</label>
+      </div>
+      
+      <div class="setting-group checkbox-group">
+        <input type="checkbox" id="observeDynamicImages">
+        <label for="observeDynamicImages" style="margin: 0;">Observe Dynamically Loaded Images</label>
+      </div>
+      <div class="info">Watch for new images added to the page (recommended for comic sites)</div>
     </div>
   </div>
   
-  <div class="section">
-    <div class="section-title">Advanced Settings</div>
-    
-    <div class="setting-group">
-      <label for="detector">Text Detector:</label>
-      <select id="detector">
-        <option value="default" selected>Default</option>
-        <option value="ctd">CTD</option>
-        <option value="craft">CRAFT</option>
-        <option value="dbconvnext">DBConvNeXt</option>
-        <option value="paddle">Paddle</option>
-        <option value="none">None</option>
-      </select>
+  <!-- Memory Management -->
+  <div class="collapsible">
+    <div class="collapsible-header" onclick="toggleCollapsible(this)">
+      <h3>⚡ Memory Management</h3>
+      <span class="collapsible-arrow">▼</span>
     </div>
-    
-    <div class="setting-group">
-      <label for="inpainter">Inpainter:</label>
-      <select id="inpainter">
-        <option value="lama_large" selected>LAMA Large</option>
-        <option value="lama_mpe">LAMA MPE</option>
-        <option value="sd">Stable Diffusion</option>
-        <option value="none">None</option>
-        <option value="original">Original</option>
-      </select>
+    <div class="collapsible-content">
+      <div class="setting-group">
+        <label for="inpaintingSize">Inpainting Size:</label>
+        <select id="inpaintingSize">
+          <option value="512">512px (Low Quality, Save Memory)</option>
+          <option value="768">768px (Balanced)</option>
+          <option value="1024">1024px (Good Quality)</option>
+          <option value="1536">1536px (High Quality)</option>
+          <option value="2048" selected>2048px (Best Quality, Default)</option>
+        </select>
+        <div class="info">
+          Higher values = better text removal quality but uses more GPU memory.<br>
+          Reduce this value if you get "Out of Memory" errors.
+        </div>
+      </div>
+      
+      <div class="setting-group">
+        <label for="autoReduceInpainting">Auto Reduce on OOM:</label>
+        <select id="autoReduceInpainting">
+          <option value="true" selected>Enabled</option>
+          <option value="false">Disabled</option>
+        </select>
+        <div class="info">
+          Automatically reduce inpainting size when Out of Memory error occurs.
+        </div>
+      </div>
     </div>
-    
-    <div class="setting-group">
-      <label for="renderer">Text Renderer:</label>
-      <select id="renderer">
-        <option value="manga2eng" selected>Manga2Eng (Recommended)</option>
-        <option value="default">Default</option>
-        <option value="none">None</option>
-      </select>
+  </div>
+  
+  <!-- Cache Settings -->
+  <div class="collapsible">
+    <div class="collapsible-header" onclick="toggleCollapsible(this)">
+      <h3>💾 Cache Settings</h3>
+      <span class="collapsible-arrow">▼</span>
+    </div>
+    <div class="collapsible-content">
+      <div class="setting-group checkbox-group">
+        <input type="checkbox" id="enableCache">
+        <label for="enableCache" style="margin: 0;">Enable Translation Cache</label>
+      </div>
+      <div class="info">Cache translations to avoid reprocessing same images</div>
+      <div class="cache-info" id="cacheInfo">Cache size: 0 entries</div>
+      <div class="setting-group">
+        <button class="btn-secondary" id="clearCache">Clear Cache</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Advanced Settings -->
+  <div class="collapsible">
+    <div class="collapsible-header" onclick="toggleCollapsible(this)">
+      <h3>⚙️ Advanced Settings</h3>
+      <span class="collapsible-arrow">▼</span>
+    </div>
+    <div class="collapsible-content">
+      <div class="setting-group">
+        <label for="detector">Text Detector:</label>
+        <select id="detector">
+          <option value="default" selected>Default</option>
+          <option value="ctd">CTD</option>
+          <option value="craft">CRAFT</option>
+          <option value="dbconvnext">DBConvNeXt</option>
+          <option value="paddle">Paddle</option>
+          <option value="none">None</option>
+        </select>
+      </div>
+      
+      <div class="setting-group">
+        <label for="inpainter">Inpainter:</label>
+        <select id="inpainter">
+          <option value="lama_large" selected>LAMA Large</option>
+          <option value="lama_mpe">LAMA MPE</option>
+          <option value="sd">Stable Diffusion</option>
+          <option value="none">None</option>
+          <option value="original">Original</option>
+        </select>
+      </div>
+      
+      <div class="setting-group">
+        <label for="renderer">Text Renderer:</label>
+        <select id="renderer">
+          <option value="manga2eng" selected>Manga2Eng (Recommended)</option>
+          <option value="default">Default</option>
+          <option value="none">None</option>
+        </select>
+      </div>
     </div>
   </div>
   
   <div class="button-group">
+    <button class="btn-secondary" id="configBtn">📖 Configuration</button>
     <button class="btn-secondary" id="resetBtn">Reset</button>
     <button class="btn-primary" id="saveBtn">Save Settings</button>
   </div>
   
   <div class="status" id="status"></div>
+  
+  
+  
+  <script>
+    // Collapsible functionality
+    function toggleCollapsible(header) {
+      const content = header.nextElementSibling;
+      const arrow = header.querySelector('.collapsible-arrow');
+      
+      content.classList.toggle('open');
+      arrow.classList.toggle('open');
+    }
+    
+    // Wait for DOM to be fully loaded
+    document.addEventListener('DOMContentLoaded', function() {
+      // Open Basic Settings by default
+      const basicSettings = document.querySelector('.collapsible');
+      if (basicSettings) {
+        const content = basicSettings.querySelector('.collapsible-content');
+        const arrow = basicSettings.querySelector('.collapsible-arrow');
+        
+        if (content && arrow) {
+          content.classList.add('open');
+          arrow.classList.add('open');
+        }
+      }
+      
+      // Add click listeners to all collapsible headers
+      const headers = document.querySelectorAll('.collapsible-header');
+      headers.forEach(header => {
+        header.addEventListener('click', function() {
+          toggleCollapsible(this);
+        });
+      });
+    });
+  </script>
   
   <script src="popup.js"></script>
 </body>
