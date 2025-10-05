@@ -563,15 +563,6 @@ function updateProcessIndicator(text, show = true, persistent = false) {
   
   if (show) {
     processIndicator.style.display = 'flex';
-    indicatorAutoHide = !persistent;
-    
-    clearTimeout(processIndicator.hideTimeout);
-    
-    if (!persistent) {
-      processIndicator.hideTimeout = setTimeout(() => {
-        hideProcessIndicator();
-      }, 5000);
-    }
   } else {
     hideProcessIndicator();
   }
