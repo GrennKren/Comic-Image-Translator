@@ -12,6 +12,11 @@ let isCacheProcessing = false;
 let settingsLoaded = false;
 let processIndicator = null; 
 let indicatorAutoHide = true;
+let hoverButtonObserver = null;
+let hoverDelegationSetup = false;
+let longPressTimer = null;
+let longPressTriggered = false;
+let touchStartPos = { x: 0, y: 0 };
 
 // Load settings with retry mechanism
 async function loadSettingsWithRetry(retries = 5, delay = 200) {
@@ -81,6 +86,8 @@ function setupFeatures() {
   console.log('Setting up features with settings:', settings);
   
   createProcessIndicator();
+  setupHoverDelegation();
+  setupMobileLongPress();
   
   if (imageObserver) {
     imageObserver.disconnect();
@@ -189,13 +196,44 @@ function cleanupOrphanedOverlays() {
   });
 }
 
+function cleanupOrphanedHoverButtons() {
+  
+  
+  const buttons = document.querySelectorAll('.comic-translator-hover-btn');
+  const currentImages = Array.from(document.querySelectorAll('img'));
+  const currentImgIds = new Set(currentImages.map(img => img.dataset.imgId).filter(id => id));
+  
+  
+  
+  buttons.forEach(btn => {
+    const btnImgId = btn.dataset.imgId;
+    if (btnImgId && !currentImgIds.has(btnImgId)) {
+      
+      btn.remove();
+    }
+  });
+  
+  
+}
+
 function setupEnhancedImageObserver() {
   console.log('Setting up enhanced image observer');
   
   imageObserver = new MutationObserver((mutations) => {
     let newImages = [];
+    let hasRemovedNodes = false;
     
     mutations.forEach((mutation) => {
+      if (mutation.removedNodes && mutation.removedNodes.length > 0) {
+        mutation.removedNodes.forEach((node) => {
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            if (node.tagName === 'IMG' || node.getElementsByTagName('img').length > 0) {
+              hasRemovedNodes = true;
+            }
+          }
+        });
+      }
+      
       if (mutation.addedNodes && mutation.addedNodes.length > 0) {
         mutation.addedNodes.forEach((node) => {
           if (node.nodeType === Node.ELEMENT_NODE) {
@@ -237,6 +275,10 @@ function setupEnhancedImageObserver() {
         }
       }
     });
+    
+    if (hasRemovedNodes) {
+      cleanupOrphanedHoverButtons();
+    }
     
     if (newImages.length > 0) {
       console.log('New images detected by observer', newImages.length);
@@ -286,6 +328,7 @@ function setupPageChangeObserver() {
       console.log('Page URL changed:', url);
       
       cleanupOrphanedOverlays();
+      cleanupOrphanedHoverButtons();
       
       if (autoTranslateEnabled) {
         scanExistingImages();
@@ -304,6 +347,7 @@ function setupPageChangeObserver() {
   window.addEventListener('popstate', () => {
     console.log('Popstate event detected');
     cleanupOrphanedOverlays();
+    cleanupOrphanedHoverButtons();
     
     if (autoTranslateEnabled) {
       scanExistingImages();
@@ -313,6 +357,7 @@ function setupPageChangeObserver() {
   window.addEventListener('pagechange', () => {
     console.log('Page change event detected');
     cleanupOrphanedOverlays();
+    cleanupOrphanedHoverButtons();
     
     if (autoTranslateEnabled) {
       scanExistingImages();
@@ -485,29 +530,31 @@ function createProcessIndicator() {
     position: fixed;
     bottom: 20px;
     right: 20px;
-    background: rgba(0, 0, 0, 0.7);
+    background: rgba(0, 0, 0, 0.85);
     color: white;
-    padding: 8px 12px;
-    border-radius: 20px;
-    font-size: 12px;
-    z-index: 10000;
+    padding: 12px 16px;
+    border-radius: 24px;
+    font-size: 14px;
+    z-index: 999999;
     display: none;
     align-items: center;
-    gap: 8px;
+    gap: 10px;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     transition: opacity 0.3s ease;
     max-width: 300px;
+    backdrop-filter: blur(10px);
   `;
   
   const spinner = document.createElement('div');
   spinner.style.cssText = `
-    width: 12px;
-    height: 12px;
+    width: 16px;
+    height: 16px;
     border: 2px solid rgba(255, 255, 255, 0.3);
     border-top: 2px solid white;
     border-radius: 50%;
     animation: spin 1s linear infinite;
+    flex-shrink: 0;
   `;
   
   const style = document.createElement('style');
@@ -522,15 +569,22 @@ function createProcessIndicator() {
   const text = document.createElement('span');
   text.id = 'comic-translator-indicator-text';
   text.textContent = 'Processing...';
+  text.style.cssText = `
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  `;
   
   const closeBtn = document.createElement('span');
   closeBtn.innerHTML = '×';
   closeBtn.style.cssText = `
     margin-left: 8px;
     cursor: pointer;
-    font-size: 16px;
+    font-size: 20px;
     opacity: 0.7;
     transition: opacity 0.2s;
+    flex-shrink: 0;
+    line-height: 1;
   `;
   closeBtn.addEventListener('mouseenter', () => {
     closeBtn.style.opacity = '1';
@@ -578,12 +632,15 @@ function hideProcessIndicator() {
 async function translateSingleImage(img) {
   console.log('Translating image:', img.src);
   
+  img.dataset.miProcessing = 'true';
+  
   const elementInfo = getElementInfo(img);
   
   updateProcessIndicator('Translating...', true, true);
   
   return new Promise((resolve, reject) => {
     const timeoutId = setTimeout(() => {
+      delete img.dataset.miProcessing;
       markImageAsProcessed(img, 'error', 'Translation timeout');
       updateProcessIndicator('Translation timeout', true, false);
       setTimeout(() => hideProcessIndicator(), 3000);
@@ -596,6 +653,7 @@ async function translateSingleImage(img) {
       imageElement: elementInfo
     }).then(response => {
       clearTimeout(timeoutId);
+      delete img.dataset.miProcessing;
       img.style.outline = '';
       updateProcessIndicator('Translation completed', true, false);
       setTimeout(() => hideProcessIndicator(), 2000);
@@ -603,6 +661,7 @@ async function translateSingleImage(img) {
       resolve(response);
     }).catch(error => {
       clearTimeout(timeoutId);
+      delete img.dataset.miProcessing;
       img.style.outline = '';
       updateProcessIndicator('Translation failed', true, false);
       setTimeout(() => hideProcessIndicator(), 3000);
@@ -622,6 +681,17 @@ function markImageAsProcessed(img, status, errorMessage = '') {
     console.warn(`Image marked as processed with error: ${img.src} - ${errorMessage}`);
   } else if (status === 'ok') {
     console.log(`Image successfully processed: ${img.src}`);
+    
+    // Remove hover button for successfully translated images
+    const hoverButtons = document.querySelectorAll('.comic-translator-hover-btn');
+    hoverButtons.forEach(btn => {
+      if (btn.dataset.forImage === img.src) {
+        btn.remove();
+      }
+    });
+    
+    // Reset hasHoverButton flag so it can be re-evaluated if needed
+    delete img.dataset.hasHoverButton;
   }
 }
 
@@ -1113,11 +1183,85 @@ function makeElementDraggable(element) {
   }
 }
 
+function setupHoverDelegation() {
+  if (hoverDelegationSetup) return;
+  hoverDelegationSetup = true;
+  
+  
+  
+  document.body.addEventListener('mouseover', (e) => {
+    if (e.target.tagName === 'IMG') {
+      const img = e.target;
+      
+      
+      
+      if (img.dataset.miProcessed === 'true' && img.dataset.miStatus === 'ok') {
+        
+        return;
+      }
+      
+      if (img.dataset.miProcessing === 'true') {
+        
+        return;
+      }
+      
+      if (autoTranslateEnabled && currentSelector && img.matches(currentSelector)) {
+        
+        return;
+      }
+      
+      if (img.naturalWidth <= 200 || img.naturalHeight <= 100) {
+        
+        return;
+      }
+      
+      const displayWidth = img.offsetWidth || img.width;
+      const displayHeight = img.offsetHeight || img.height;
+      
+      if (displayWidth <= 200 || displayHeight <= 100) {
+        
+        return;
+      }
+      
+      const button = document.querySelector(`.comic-translator-hover-btn[data-img-id="${img.dataset.imgId}"]`);
+      if (!button) {
+        
+        return;
+      }
+      
+      const rect = img.getBoundingClientRect();
+      
+      
+      button.style.display = 'flex';
+      button.style.left = `${rect.right - 40 + window.scrollX}px`;
+      button.style.top = `${rect.top + 8 + window.scrollY}px`;
+      
+      selectedImage = img;
+    }
+  }, true);
+  
+  document.body.addEventListener('mouseout', (e) => {
+    if (e.target.tagName === 'IMG') {
+      const img = e.target;
+      const button = document.querySelector(`.comic-translator-hover-btn[data-img-id="${img.dataset.imgId}"]`);
+      
+      if (button) {
+        setTimeout(() => {
+          button.style.display = 'none';
+        }, 100);
+      }
+    }
+  }, true);
+}
+
 function initializeHoverButtons() {
   const images = document.querySelectorAll('img');
   images.forEach(img => {
     addHoverButton(img);
   });
+  
+  // Start observing for new images
+  setupHoverButtonObserver();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -1125,13 +1269,147 @@ document.addEventListener('DOMContentLoaded', () => {
   console.log('Current settings:', settings);
 });
 
+function setupHoverButtonObserver() {
+  if (hoverButtonObserver) {
+    hoverButtonObserver.disconnect();
+  }
+  
+  hoverButtonObserver = new MutationObserver((mutations) => {
+    mutations.forEach((mutation) => {
+      if (mutation.addedNodes && mutation.addedNodes.length > 0) {
+        mutation.addedNodes.forEach((node) => {
+          if (node.nodeType === Node.ELEMENT_NODE) {
+            if (node.tagName === 'IMG') {
+              
+              addHoverButton(node);
+            }
+            
+            const images = node.getElementsByTagName('img');
+            if (images && images.length > 0) {
+              Array.from(images).forEach(img => {
+                
+                addHoverButton(img);
+              });
+            }
+          }
+        });
+      }
+      
+      if (mutation.type === 'attributes' && mutation.target.tagName === 'IMG') {
+        const img = mutation.target;
+        
+        if (mutation.attributeName === 'src' || mutation.attributeName === 'data-src') {
+          const oldSrc = mutation.oldValue;
+          const newSrc = img.src || img.dataset.src;
+          
+          if (oldSrc && newSrc && oldSrc !== newSrc) {
+            
+            
+            delete img.dataset.miProcessed;
+            delete img.dataset.miStatus;
+            delete img.dataset.miError;
+            delete img.dataset.hasHoverButton;
+            
+            const oldButtons = document.querySelectorAll('.comic-translator-hover-btn');
+            
+            oldButtons.forEach(btn => {
+              if (btn.dataset.forImage === oldSrc) {
+                
+                btn.remove();
+              }
+            });
+            
+            setTimeout(() => {
+              
+              addHoverButton(img);
+            }, 100);
+            
+            if (autoTranslateEnabled && currentSelector && img.matches(currentSelector)) {
+              setTimeout(() => {
+                if (shouldProcessImage(img)) {
+                  
+                  queueImageForTranslation(img);
+                }
+              }, 200);
+            }
+          }
+        }
+        
+        if (mutation.attributeName === 'data-mi-processed' || mutation.attributeName === 'data-mi-status') {
+          addHoverButton(img);
+        }
+      }
+    });
+  });
+  
+  hoverButtonObserver.observe(document.body, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['src', 'data-src', 'data-mi-processed', 'data-mi-status'],
+    attributeOldValue: true
+  });
+  
+  
+}
+
 function addHoverButton(img) {
-  if (img.dataset.hasHoverButton) return;
+  if (img.dataset.miProcessed === 'true' && img.dataset.miStatus === 'ok') {
+    
+    return;
+  }
+  
+  if (!img.complete || img.naturalWidth === 0) {
+    
+    
+    const handleLoad = () => {
+      
+      img.removeEventListener('load', handleLoad);
+      img.removeEventListener('error', handleError);
+      addHoverButton(img);
+    };
+    
+    const handleError = () => {
+      
+      img.removeEventListener('load', handleLoad);
+      img.removeEventListener('error', handleError);
+    };
+    
+    img.addEventListener('load', handleLoad);
+    img.addEventListener('error', handleError);
+    return;
+  }
+  
+  const existingButton = document.querySelector(`.comic-translator-hover-btn[data-for-image="${CSS.escape(img.src)}"]`);
+  if (existingButton) {
+    
+    return;
+  }
+  
+  if (img.dataset.hasHoverButton === 'true') {
+    
+    const allButtons = document.querySelectorAll('.comic-translator-hover-btn');
+    allButtons.forEach(btn => {
+      if (btn.dataset.imgId === img.dataset.imgId) {
+        
+        btn.remove();
+      }
+    });
+  }
+  
+  if (!img.dataset.imgId) {
+    img.dataset.imgId = 'img_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+  }
+  
   img.dataset.hasHoverButton = 'true';
+  
+  
   
   const hoverButton = document.createElement('div');
   hoverButton.innerHTML = '🌐';
   hoverButton.className = 'comic-translator-hover-btn';
+  hoverButton.dataset.forImage = img.src;
+  hoverButton.dataset.imgId = img.dataset.imgId;
   hoverButton.style.cssText = `
     position: absolute;
     background: #4A90E2;
@@ -1166,24 +1444,146 @@ function addHoverButton(img) {
     hoverButton.style.display = 'none';
   });
   
-  img.addEventListener('mouseenter', () => {
-    if (autoTranslateEnabled && currentSelector && img.matches(currentSelector)) {
-      return;
+  document.body.appendChild(hoverButton);
+  
+}
+
+function setupMobileLongPress() {
+  console.log('[MOBILE] Setting up long-press detection');
+  
+  document.body.addEventListener('touchstart', (e) => {
+    const touch = e.touches[0];
+    touchStartPos = { x: touch.clientX, y: touch.clientY };
+    longPressTriggered = false;
+    
+    longPressTimer = setTimeout(() => {
+      longPressTriggered = true;
+      
+      const img = findImageAtPoint(touchStartPos.x, touchStartPos.y);
+      
+      if (img) {
+        console.log('[MOBILE] Long press detected on image:', img.src);
+        
+        if (navigator.vibrate) {
+          navigator.vibrate(50);
+        }
+        
+        showTranslatePrompt(img);
+      }
+    }, 500);
+  }, { passive: true });
+  
+  document.body.addEventListener('touchend', (e) => {
+    clearTimeout(longPressTimer);
+  }, { passive: true });
+  
+  document.body.addEventListener('touchmove', (e) => {
+    const touch = e.touches[0];
+    const moveDistance = Math.sqrt(
+      Math.pow(touch.clientX - touchStartPos.x, 2) + 
+      Math.pow(touch.clientY - touchStartPos.y, 2)
+    );
+    
+    if (moveDistance > 10) {
+      clearTimeout(longPressTimer);
+    }
+  }, { passive: true });
+}
+
+function findImageAtPoint(x, y) {
+  const elements = document.elementsFromPoint(x, y);
+  
+  for (const el of elements) {
+    if (el.tagName === 'IMG') {
+      const displayWidth = el.offsetWidth || el.width;
+      const displayHeight = el.offsetHeight || el.height;
+      
+      if (el.naturalWidth > 200 && el.naturalHeight > 100 && 
+          displayWidth > 200 && displayHeight > 100) {
+        
+        if (el.dataset.miProcessed === 'true' && el.dataset.miStatus === 'ok') {
+          console.log('[MOBILE] Image already translated');
+          return null;
+        }
+        
+        return el;
+      }
     }
     
-    if (img.naturalWidth > 200 && img.naturalHeight > 100) {
-      const rect = img.getBoundingClientRect();
-      hoverButton.style.display = 'flex';
-      hoverButton.style.left = `${rect.right - 40 + window.scrollX}px`;
-      hoverButton.style.top = `${rect.top + 8 + window.scrollY}px`;
+    const img = el.querySelector('img');
+    if (img) {
+      const displayWidth = img.offsetWidth || img.width;
+      const displayHeight = img.offsetHeight || img.height;
+      
+      if (img.naturalWidth > 200 && img.naturalHeight > 100 && 
+          displayWidth > 200 && displayHeight > 100) {
+        
+        if (img.dataset.miProcessed === 'true' && img.dataset.miStatus === 'ok') {
+          console.log('[MOBILE] Image already translated');
+          return null;
+        }
+        
+        return img;
+      }
     }
+  }
+  
+  return null;
+}
+
+function showTranslatePrompt(img) {
+  const existingPrompt = document.querySelector('.translate-prompt-mobile');
+  if (existingPrompt) {
+    existingPrompt.remove();
+  }
+  
+  const prompt = document.createElement('div');
+  prompt.className = 'translate-prompt-mobile';
+  prompt.innerHTML = '🌐 Translate this image?';
+  prompt.style.cssText = `
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(74, 144, 226, 0.95);
+    color: white;
+    padding: 14px 28px;
+    border-radius: 28px;
+    font-size: 15px;
+    font-weight: 600;
+    z-index: 999999;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    cursor: pointer;
+    animation: slideUpPrompt 0.3s ease;
+    backdrop-filter: blur(10px);
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  `;
+  
+  const style = document.createElement('style');
+  if (!document.getElementById('mobile-prompt-animation')) {
+    style.id = 'mobile-prompt-animation';
+    style.textContent = `
+      @keyframes slideUpPrompt {
+        from { transform: translateX(-50%) translateY(20px); opacity: 0; }
+        to { transform: translateX(-50%) translateY(0); opacity: 1; }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+  
+  prompt.addEventListener('click', () => {
+    selectedImage = img;
+    translateSelectedImage();
+    prompt.remove();
   });
   
-  img.addEventListener('mouseleave', () => {
-    setTimeout(() => {
-      hoverButton.style.display = 'none';
-    }, 100);
-  });
+  document.body.appendChild(prompt);
   
-  document.body.appendChild(hoverButton);
+  setTimeout(() => {
+    if (prompt.parentNode) {
+      prompt.style.animation = 'slideUpPrompt 0.3s ease reverse';
+      setTimeout(() => prompt.remove(), 300);
+    }
+  }, 3000);
 }
