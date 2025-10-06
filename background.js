@@ -1,3 +1,8 @@
+// Small notification, this is the last commit for manifest v2 to v3 migration.
+// After this, all commits will be for manifest v3 only.
+// Please make sure to test the extension thoroughly after this migration.
+// Thank you for your understanding!
+
 // Background script for Comic Image Translator Extension
 
 const DEFAULT_SETTINGS = {
