@@ -1297,31 +1297,13 @@ function setupHoverDelegation() {
 }
 
 function initializeHoverButtons() {
-  setupLazyHoverButtonCreation();
-}
-
-function setupLazyHoverButtonCreation() {
-  if (buttonCreationObserver) {
-    buttonCreationObserver.disconnect();
-  }
-  
-  buttonCreationObserver = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        const img = entry.target;
-        if (!img.dataset.hasHoverButton) {
-          addHoverButton(img);
-        }
-        buttonCreationObserver.unobserve(img);
-      }
+    const images = document.querySelectorAll('img');
+    images.forEach(img => {
+      addHoverButton(img);
     });
-  }, { rootMargin: '200px' });
-  
-  document.querySelectorAll('img').forEach(img => {
-    if (img.naturalWidth > 200 && img.naturalHeight > 100) {
-      buttonCreationObserver.observe(img);
-    }
-  });
+    
+    // Start observing for new images
+    setupHoverButtonObserver();
 }
 
 document.addEventListener('DOMContentLoaded', () => {
