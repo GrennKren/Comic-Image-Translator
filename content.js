@@ -1,22 +1,58 @@
-// Global variables
+//// Global variables
+
+// SETTINGS & CONFIGURATION
 let settings = {};
-let selectedImage = null;
-let imageObserver = null;
-let autoTranslateEnabled = false;
+let settingsLoaded = false;
 let currentSelector = '[name="image-item"] img';
+
+// TRANSLATION STATE
+let autoTranslateEnabled = false;
 let translationQueue = new Set();
 let isProcessing = false;
-let pageChangeObserver = null;
+let selectedImage = null;
+
+// CACHE MANAGEMENT
 let cacheProcessingQueue = [];
 let isCacheProcessing = false;
-let settingsLoaded = false;
-let processIndicator = null; 
-let indicatorAutoHide = true;
+let cachedHoverButtons = null;
+let cacheTime = 0;
+
+// OBSERVERS
+let imageObserver = null;
+let pageChangeObserver = null;
 let hoverButtonObserver = null;
+let buttonCreationObserver = null;
+
+// UI ELEMENTS
+let processIndicator = null;
+let indicatorAutoHide = true;
+
+// HOVER BUTTON SYSTEM
 let hoverDelegationSetup = false;
+
+// MOBILE TOUCH HANDLING
 let longPressTimer = null;
 let longPressTriggered = false;
 let touchStartPos = { x: 0, y: 0 };
+
+// CLEANUP & DEBOUNCE
+let cleanupTimeout = null;
+
+function getHoverButtons() {
+  const now = Date.now();
+  if (cachedHoverButtons && now - cacheTime < 1000) {
+    return cachedHoverButtons;
+  }
+  
+  cachedHoverButtons = document.querySelectorAll('.comic-translator-hover-btn');
+  cacheTime = now;
+  return cachedHoverButtons;
+}
+
+function invalidateButtonCache() {
+  cachedHoverButtons = null;
+  cacheTime = 0;
+}
 
 // Load settings with retry mechanism
 async function loadSettingsWithRetry(retries = 5, delay = 200) {
@@ -197,33 +233,34 @@ function cleanupOrphanedOverlays() {
 }
 
 function cleanupOrphanedHoverButtons() {
+  if (cleanupTimeout) clearTimeout(cleanupTimeout);
   
-  
-  const buttons = document.querySelectorAll('.comic-translator-hover-btn');
-  const currentImages = Array.from(document.querySelectorAll('img'));
-  const currentImgIds = new Set(currentImages.map(img => img.dataset.imgId).filter(id => id));
-  
-  
-  
-  buttons.forEach(btn => {
-    const btnImgId = btn.dataset.imgId;
-    if (btnImgId && !currentImgIds.has(btnImgId)) {
-      
-      btn.remove();
-    }
-  });
-  
-  
+  cleanupTimeout = setTimeout(() => {
+    const buttons = getHoverButtons();
+    const currentImages = Array.from(document.querySelectorAll('img'));
+    const currentImgIds = new Set(currentImages.map(img => img.dataset.imgId).filter(id => id));
+    
+    buttons.forEach(btn => {
+      const btnImgId = btn.dataset.imgId;
+      if (btnImgId && !currentImgIds.has(btnImgId)) {
+        btn.remove();
+      }
+    });
+  }, 300);
+  invalidateButtonCache();
 }
 
 function setupEnhancedImageObserver() {
   console.log('Setting up enhanced image observer');
   
-  imageObserver = new MutationObserver((mutations) => {
+  let observerTimeout = null;
+  let pendingMutations = [];
+  
+  const processMutations = () => {
     let newImages = [];
     let hasRemovedNodes = false;
     
-    mutations.forEach((mutation) => {
+    pendingMutations.forEach((mutation) => {
       if (mutation.removedNodes && mutation.removedNodes.length > 0) {
         mutation.removedNodes.forEach((node) => {
           if (node.nodeType === Node.ELEMENT_NODE) {
@@ -276,6 +313,8 @@ function setupEnhancedImageObserver() {
       }
     });
     
+    pendingMutations = [];
+    
     if (hasRemovedNodes) {
       cleanupOrphanedHoverButtons();
     }
@@ -302,6 +341,17 @@ function setupEnhancedImageObserver() {
         }
       }
     }
+  };
+  
+  imageObserver = new MutationObserver((mutations) => {
+    pendingMutations.push(...mutations);
+    
+    if (observerTimeout) return;
+    
+    observerTimeout = setTimeout(() => {
+      observerTimeout = null;
+      processMutations();
+    }, 100);
   });
   
   imageObserver.observe(document.body, {
@@ -683,7 +733,7 @@ function markImageAsProcessed(img, status, errorMessage = '') {
     console.log(`Image successfully processed: ${img.src}`);
     
     // Remove hover button for successfully translated images
-    const hoverButtons = document.querySelectorAll('.comic-translator-hover-btn');
+    const hoverButtons = getHoverButtons();
     hoverButtons.forEach(btn => {
       if (btn.dataset.forImage === img.src) {
         btn.remove();
@@ -1187,31 +1237,23 @@ function setupHoverDelegation() {
   if (hoverDelegationSetup) return;
   hoverDelegationSetup = true;
   
-  
-  
   document.body.addEventListener('mouseover', (e) => {
     if (e.target.tagName === 'IMG') {
       const img = e.target;
       
-      
-      
       if (img.dataset.miProcessed === 'true' && img.dataset.miStatus === 'ok') {
-        
         return;
       }
       
       if (img.dataset.miProcessing === 'true') {
-        
         return;
       }
       
       if (autoTranslateEnabled && currentSelector && img.matches(currentSelector)) {
-        
         return;
       }
       
       if (img.naturalWidth <= 200 || img.naturalHeight <= 100) {
-        
         return;
       }
       
@@ -1238,7 +1280,7 @@ function setupHoverDelegation() {
       
       selectedImage = img;
     }
-  }, true);
+  }, { capture: true, passive: true });
   
   document.body.addEventListener('mouseout', (e) => {
     if (e.target.tagName === 'IMG') {
@@ -1251,17 +1293,35 @@ function setupHoverDelegation() {
         }, 100);
       }
     }
-  }, true);
+  }, { capture: true, passive: true });
 }
 
 function initializeHoverButtons() {
-  const images = document.querySelectorAll('img');
-  images.forEach(img => {
-    addHoverButton(img);
-  });
+  setupLazyHoverButtonCreation();
+}
+
+function setupLazyHoverButtonCreation() {
+  if (buttonCreationObserver) {
+    buttonCreationObserver.disconnect();
+  }
   
-  // Start observing for new images
-  setupHoverButtonObserver();
+  buttonCreationObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const img = entry.target;
+        if (!img.dataset.hasHoverButton) {
+          addHoverButton(img);
+        }
+        buttonCreationObserver.unobserve(img);
+      }
+    });
+  }, { rootMargin: '200px' });
+  
+  document.querySelectorAll('img').forEach(img => {
+    if (img.naturalWidth > 200 && img.naturalHeight > 100) {
+      buttonCreationObserver.observe(img);
+    }
+  });
 }
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -1310,7 +1370,7 @@ function setupHoverButtonObserver() {
             delete img.dataset.miError;
             delete img.dataset.hasHoverButton;
             
-            const oldButtons = document.querySelectorAll('.comic-translator-hover-btn');
+            const oldButtons = getHoverButtons();
             
             oldButtons.forEach(btn => {
               if (btn.dataset.forImage === oldSrc) {
@@ -1354,8 +1414,14 @@ function setupHoverButtonObserver() {
 }
 
 function addHoverButton(img) {
+  const rect = img.getBoundingClientRect();
+  const isNearViewport = rect.top < window.innerHeight + 500 && rect.bottom > -500;
+  
+  if (!isNearViewport && !img.dataset.hasHoverButton) {
+    return;
+  }
+
   if (img.dataset.miProcessed === 'true' && img.dataset.miStatus === 'ok') {
-    
     return;
   }
   
@@ -1388,7 +1454,7 @@ function addHoverButton(img) {
   
   if (img.dataset.hasHoverButton === 'true') {
     
-    const allButtons = document.querySelectorAll('.comic-translator-hover-btn');
+    const allButtons = getHoverButtons();
     allButtons.forEach(btn => {
       if (btn.dataset.imgId === img.dataset.imgId) {
         
@@ -1445,7 +1511,7 @@ function addHoverButton(img) {
   });
   
   document.body.appendChild(hoverButton);
-  
+  invalidateButtonCache();
 }
 
 function setupMobileLongPress() {
