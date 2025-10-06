@@ -2,462 +2,22 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Comic Translator - Options</title>
-  <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
-
-    html {
-      font-size: 16px;
-    }
-
-    @media (max-width: 768px) {
-      html {
-        font-size: 14px;
-      }
-    }
-
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-      background: #f5f5f5;
-      padding: 20px;
-      -webkit-text-size-adjust: 100%;
-    }
-
-    @media (max-width: 768px) {
-      body {
-        padding: 0;
-        background: white;
-      }
-    }
-
-    .container {
-      max-width: 900px;
-      margin: 0 auto;
-      background: white;
-      border-radius: 12px;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-      overflow: hidden;
-    }
-
-    @media (max-width: 768px) {
-      .container {
-        border-radius: 0;
-        box-shadow: none;
-      }
-    }
-
-    .header {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-      color: white;
-      padding: 30px;
-    }
-
-    @media (max-width: 768px) {
-      .header {
-        padding: 15px;
-      }
-    }
-
-    .header h1 {
-      font-size: 1.75rem;
-      margin-bottom: 10px;
-    }
-
-    @media (max-width: 768px) {
-      .header h1 {
-        font-size: 1.25rem;
-        margin-bottom: 5px;
-      }
-    }
-
-    .header p {
-      opacity: 0.9;
-      font-size: 0.875rem;
-    }
-
-    @media (max-width: 768px) {
-      .header p {
-        font-size: 0.75rem;
-      }
-    }
-
-    .content {
-      padding: 30px;
-    }
-
-    @media (max-width: 768px) {
-      .content {
-        padding: 10px;
-      }
-    }
-
-    .section {
-      margin-bottom: 30px;
-    }
-
-    @media (max-width: 768px) {
-      .section {
-        margin-bottom: 15px;
-      }
-    }
-
-    .section-title {
-      font-size: 1.125rem;
-      font-weight: 700;
-      color: #333;
-      margin-bottom: 15px;
-      padding-bottom: 10px;
-      border-bottom: 2px solid #667eea;
-    }
-
-    @media (max-width: 768px) {
-      .section-title {
-        font-size: 1rem;
-        margin-bottom: 10px;
-        padding-bottom: 5px;
-      }
-    }
-
-    .info-box {
-      background: #e7f3ff;
-      border-left: 4px solid #4A90E2;
-      padding: 15px;
-      margin-bottom: 20px;
-      border-radius: 4px;
-    }
-
-    @media (max-width: 768px) {
-      .info-box {
-        padding: 10px;
-        margin-bottom: 10px;
-        border-left-width: 3px;
-      }
-    }
-
-    .info-box h3 {
-      font-size: 0.875rem;
-      color: #2c5aa0;
-      margin-bottom: 8px;
-    }
-
-    @media (max-width: 768px) {
-      .info-box h3 {
-        font-size: 0.8125rem;
-      }
-    }
-
-    .info-box p {
-      font-size: 0.8125rem;
-      color: #555;
-      line-height: 1.5;
-    }
-
-    @media (max-width: 768px) {
-      .info-box p {
-        font-size: 0.75rem;
-        line-height: 1.4;
-      }
-    }
-
-    .info-box ul {
-      margin: 10px 0 0 20px;
-      font-size: 0.8125rem;
-      color: #555;
-    }
-
-    @media (max-width: 768px) {
-      .info-box ul {
-        font-size: 0.75rem;
-        margin-left: 15px;
-      }
-    }
-
-    .info-box li {
-      margin-bottom: 5px;
-    }
-
-    .translator-table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 15px;
-      font-size: 0.8125rem;
-    }
-
-    @media (max-width: 768px) {
-      .translator-table {
-        font-size: 0.6875rem;
-        display: block;
-        overflow-x: auto;
-        -webkit-overflow-scrolling: touch;
-      }
-      
-      .translator-table thead,
-      .translator-table tbody,
-      .translator-table tr {
-        display: table;
-        width: 100%;
-        table-layout: fixed;
-      }
-    }
-
-    .translator-table th {
-      background: #f8f9fa;
-      padding: 12px 8px;
-      text-align: left;
-      font-weight: 600;
-      color: #333;
-      border-bottom: 2px solid #dee2e6;
-    }
-
-    @media (max-width: 768px) {
-      .translator-table th {
-        padding: 6px 4px;
-      }
-    }
-
-    .translator-table td {
-      padding: 10px 8px;
-      border-bottom: 1px solid #dee2e6;
-    }
-
-    @media (max-width: 768px) {
-      .translator-table td {
-        padding: 6px 4px;
-      }
-    }
-
-    .translator-table tr:hover {
-      background: #f8f9fa;
-    }
-
-    .badge {
-      display: inline-block;
-      padding: 3px 8px;
-      border-radius: 12px;
-      font-size: 0.6875rem;
-      font-weight: 600;
-    }
-
-    @media (max-width: 768px) {
-      .badge {
-        padding: 2px 5px;
-        font-size: 0.625rem;
-      }
-    }
-
-    .badge-offline {
-      background: #d4edda;
-      color: #155724;
-    }
-
-    .badge-api {
-      background: #fff3cd;
-      color: #856404;
-    }
-
-    .badge-new {
-      background: #007bff;
-      color: white;
-    }
-
-    .code {
-      background: #f4f4f4;
-      padding: 2px 6px;
-      border-radius: 3px;
-      font-family: 'Courier New', monospace;
-      font-size: 0.75rem;
-      color: #e83e8c;
-      word-break: break-all;
-    }
-
-    @media (max-width: 768px) {
-      .code {
-        font-size: 0.6875rem;
-        padding: 2px 4px;
-      }
-    }
-
-    .setup-steps {
-      background: #fff9e6;
-      border-left: 4px solid #ffc107;
-      padding: 15px;
-      margin: 15px 0;
-      border-radius: 4px;
-    }
-
-    @media (max-width: 768px) {
-      .setup-steps {
-        padding: 10px;
-        margin: 10px 0;
-      }
-    }
-
-    .setup-steps h4 {
-      color: #856404;
-      margin-bottom: 10px;
-      font-size: 0.875rem;
-    }
-
-    @media (max-width: 768px) {
-      .setup-steps h4 {
-        font-size: 0.8125rem;
-      }
-    }
-
-    .setup-steps ol {
-      margin-left: 20px;
-      color: #666;
-      font-size: 0.8125rem;
-      line-height: 1.6;
-    }
-
-    @media (max-width: 768px) {
-      .setup-steps ol {
-        font-size: 0.75rem;
-        margin-left: 15px;
-        line-height: 1.5;
-      }
-    }
-
-    .command-box {
-      background: #2d2d2d;
-      color: #f8f8f2;
-      padding: 15px;
-      border-radius: 6px;
-      font-family: 'Courier New', monospace;
-      font-size: 0.75rem;
-      overflow-x: auto;
-      margin: 10px 0;
-      -webkit-overflow-scrolling: touch;
-    }
-
-    @media (max-width: 768px) {
-      .command-box {
-        padding: 8px;
-        font-size: 0.6875rem;
-      }
-    }
-
-    .command-box code {
-      color: #a6e22e;
-    }
-
-    .warning {
-      background: #fff3cd;
-      border: 1px solid #ffc107;
-      color: #856404;
-      padding: 12px;
-      border-radius: 4px;
-      margin: 15px 0;
-      font-size: 0.8125rem;
-    }
-
-    @media (max-width: 768px) {
-      .warning {
-        padding: 8px;
-        font-size: 0.75rem;
-      }
-    }
-
-    .footer {
-      background: #f8f9fa;
-      padding: 20px 30px;
-      text-align: center;
-      color: #666;
-      font-size: 0.8125rem;
-    }
-
-    @media (max-width: 768px) {
-      .footer {
-        padding: 15px 10px;
-        font-size: 0.75rem;
-        line-height: 1.5;
-      }
-    }
-
-    .footer a {
-      color: #667eea;
-      text-decoration: none;
-      font-weight: 600;
-    }
-
-    .footer a:hover {
-      text-decoration: underline;
-    }
-
-    .api-setup {
-      background: #f8f9fa;
-      border: 1px solid #dee2e6;
-      border-radius: 6px;
-      padding: 15px;
-      margin: 10px 0;
-    }
-
-    @media (max-width: 768px) {
-      .api-setup {
-        padding: 8px;
-      }
-    }
-
-    .api-setup h4 {
-      color: #495057;
-      margin-bottom: 10px;
-      font-size: 0.875rem;
-    }
-
-    @media (max-width: 768px) {
-      .api-setup h4 {
-        font-size: 0.8125rem;
-      }
-    }
-
-    .api-setup ol {
-      margin-left: 20px;
-      font-size: 0.8125rem;
-    }
-
-    @media (max-width: 768px) {
-      .api-setup ol {
-        margin-left: 15px;
-        font-size: 0.75rem;
-      }
-    }
-
-    .env-var {
-      background: #e9ecef;
-      padding: 4px 8px;
-      border-radius: 3px;
-      font-family: 'Courier New', monospace;
-      font-size: 0.6875rem;
-      color: #495057;
-      word-break: break-all;
-    }
-
-    @media (max-width: 768px) {
-      .env-var {
-        font-size: 0.625rem;
-        padding: 2px 5px;
-      }
-    }
-  </style>
-</head>
-<body>
+  <title>🌐 Comic Translator - Configuration Guide & Translator Reference</title>
+  <link rel="stylesheet" href="style.css"> <!-- Reuse popup.css for styling -->
+  <script src="browser-polyfill.js"></script>
+  <script src="configuration.js"></script>
 </head>
 <body>
   <div class="container">
-    <div class="header">
+    <div class="header-config">
       <h1>🌐 Comic Translator</h1>
       <p>Configuration Guide & Translator Reference</p>
     </div>
     
-    <div class="content">
+    <div class="content-config">
       <div class="section">
         <div class="section-title">📋 How to Use</div>
-        <div class="info-box">
+        <div class="info-box-config">
           <h3>Three Ways to Translate Images:</h3>
           <ul>
             <li><strong>Right-click:</strong> Right-click on any manga image and select "Translate Manga Image"</li>
@@ -503,7 +63,7 @@
       <div class="section">
         <div class="section-title">🌐 Translator Reference</div>
         
-        <div class="info-box">
+        <div class="info-box-config">
           <h3>Offline Translators (Recommended for Privacy)</h3>
           <p>These translators work completely offline and don't require API keys. They're perfect for privacy-conscious users and work without internet connection once models are downloaded.</p>
         </div>
@@ -563,7 +123,7 @@
           </tbody>
         </table>
         
-        <div class="info-box" style="margin-top: 30px;">
+        <div class="info-box-config" style="margin-top: 30px;">
           <h3>Online Translators (API Key Required)</h3>
           <p>These translators require API keys and internet connection but often provide higher quality translations, especially for complex sentences and context-aware translations.</p>
         </div>
@@ -623,7 +183,7 @@
           </tbody>
         </table>
         
-        <div class="info-box" style="margin-top: 30px;">
+        <div class="info-box-config" style="margin-top: 30px;">
           <h3>Online Translators (API Key Required)</h3>
           <p>These translators require API keys and internet connection but often provide higher quality translations, especially for complex sentences and context-aware translations.</p>
         </div>
@@ -865,12 +425,12 @@
       <div class="section">
         <div class="section-title">🎨 Display Settings</div>
         
-        <div class="info-box">
+        <div class="info-box-config">
           <h3>Text Rendering Options</h3>
           <p>The extension supports multiple display modes and text rendering options. For best results with manga/comic images, use the recommended settings below.</p>
         </div>
         
-        <div class="info-box">
+        <div class="info-box-config">
           <h3>Font Size Control</h3>
           <ul>
             <li><strong>Automatic:</strong> The <code>manga2eng</code> renderer (default) automatically adjusts text size to fit speech bubbles</li>
@@ -879,7 +439,7 @@
           </ul>
         </div>
         
-        <div class="info-box">
+        <div class="info-box-config">
           <h3>Text Detector Options</h3>
           <ul>
             <li><strong>default:</strong> Best overall performance for most manga</li>
@@ -888,7 +448,7 @@
           </ul>
         </div>
         
-        <div class="info-box">
+        <div class="info-box-config">
           <h3>Inpainter Options</h3>
           <ul>
             <li><strong>lama_large:</strong> Best quality for removing text (recommended)</li>
@@ -897,7 +457,7 @@
           </ul>
         </div>
         
-        <div class="info-box">
+        <div class="info-box-config">
           <h3>Renderer Options</h3>
           <ul>
             <li><strong>manga2eng:</strong> Better for fitting English text in bubbles (recommended)</li>
@@ -909,7 +469,7 @@
       <div class="section">
         <div class="section-title">⚡ Performance & Memory</div>
         
-        <div class="info-box">
+        <div class="info-box-config">
           <h3>Memory Management</h3>
           <p>The extension includes automatic memory management to handle GPU out-of-memory errors:</p>
           <ul>
@@ -919,7 +479,7 @@
           </ul>
         </div>
         
-        <div class="info-box">
+        <div class="info-box-config">
           <h3>Cache System</h3>
           <ul>
             <li><strong>Translation Cache:</strong> Stores up to 100 translated images locally</li>
@@ -932,7 +492,7 @@
       <div class="section">
         <div class="section-title">🔧 Advanced Configuration</div>
         
-        <div class="info-box">
+        <div class="info-box-config">
           <h3>Configuration File</h3>
           <p>You can also create a <code>config.json</code> file in the manga-image-translator directory for persistent settings:</p>
         </div>
@@ -963,75 +523,7 @@
       </p>
     </div>
 
-    <script>
-      // Check if we're on mobile and show floating button
-      async function checkAndShowFloatingButton() {
-        try {
-          const currentWindow = await browser.windows.getCurrent();
-          
-          if (currentWindow.type === 'normal') {
-            // We're in mobile/tablet mode
-            const floatingBtn = document.getElementById('floatingBackBtn');
-            floatingBtn.style.display = 'flex';
-          }
-        } catch (error) {
-          // Fallback: check window width
-          if (window.innerWidth <= 768) {
-            const floatingBtn = document.getElementById('floatingBackBtn');
-            floatingBtn.style.display = 'flex';
-          }
-        }
-      }
-      
-      // Back button handler for both footer link and floating button
-      async function handleBackClick(e) {
-        e.preventDefault();
-        
-        try {
-          const currentWindow = await browser.windows.getCurrent();
-          
-          if (currentWindow.type === 'popup') {
-            // Desktop: try to open popup and close this tab
-            const popupUrl = browser.runtime.getURL('popup.html');
-            try {
-              await browser.windows.create({
-                url: popupUrl,
-                type: 'popup',
-                width: 350,
-                height: 600
-              });
-              window.close();
-            } catch (popupError) {
-              console.log('Cannot open popup, navigating to popup page');
-              window.location.href = popupUrl;
-            }
-          } else {
-            // Mobile: replace current page with popup
-            const popupUrl = browser.runtime.getURL('popup.html');
-            window.location.href = popupUrl;
-          }
-        } catch (error) {
-          // Fallback: try to go back or navigate to popup
-          if (window.history.length > 1) {
-            window.history.back();
-          } else {
-            const popupUrl = browser.runtime.getURL('popup.html');
-            window.location.href = popupUrl;
-          }
-        }
-      }
-      
-      // Add event listeners
-      document.addEventListener('DOMContentLoaded', function() {
-        checkAndShowFloatingButton();
-        
-        // Floating back button
-        const floatingBackBtn = document.getElementById('floatingBackBtn');
-        if (floatingBackBtn) {
-          floatingBackBtn.addEventListener('click', handleBackClick);
-        }
-      });
-    </script>
+    
   </div>
 </body>
 </html>

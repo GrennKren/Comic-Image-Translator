@@ -38,10 +38,15 @@ const DEFAULT_SETTINGS = {
 };
 
 // Load settings on popup open
-document.addEventListener('DOMContentLoaded', loadSettings);
-
-// Initialize collapsible when DOM is ready
+// Update the DOMContentLoaded event listener in popup.js to ensure all elements exist before adding listeners
 document.addEventListener('DOMContentLoaded', function() {
+  // Ensure polyfill is loaded before using browser API
+  if (typeof browser === 'undefined') {
+    console.error('Browser polyfill not loaded in popup');
+    showStatus('Error: Browser API not available', 'error');
+    return;
+  }
+  
   // Open Basic Settings by default
   const basicSettings = document.querySelector('.collapsible');
   if (basicSettings) {
@@ -61,96 +66,146 @@ document.addEventListener('DOMContentLoaded', function() {
       toggleCollapsible(this);
     });
   });
-});
-
-// Manage Selectors button handler
-
-document.getElementById('manageSelectorsBtn').addEventListener('click', async function() {
-  const selectorsUrl = browser.runtime.getURL('selectors.html');
   
-  if (await isPopup()) {
-    // Desktop popup: open selectors in new tab and close popup
-    await openOrSwitchToTab(selectorsUrl);
-    window.close();
-  } else {
-    // Mobile tab: replace current page
-    window.location.href = selectorsUrl;
-  }
-});
+  // Wait a tick for collapsible to render, then add button listeners
+  setTimeout(() => {
+    // Manage Selectors button handler
+    const manageSelectorsBtn = document.getElementById('manageSelectorsBtn');
+    if (manageSelectorsBtn) {
+      manageSelectorsBtn.addEventListener('click', async function() {
+        const selectorsUrl = browser.runtime.getURL('selectors.html');
+        
+        if (await isPopup()) {
+          // Desktop popup: open selectors in new tab and close popup
+          await openOrSwitchToTab(selectorsUrl);
+          window.close();
+        } else {
+          // Mobile tab: replace current page
+          window.location.href = selectorsUrl;
+        }
+      });
+    } else {
+      console.warn('manageSelectorsBtn not found');
+    }
 
-document.getElementById('fontSizeOffset').addEventListener('change', function() {
-  const value = this.value;
-  const info = document.querySelector('label[for="fontSizeOffset"]').nextElementSibling;
-  if (value > 0) {
-    info.textContent = `Font size increased by ${value} pixels`;
-  } else if (value < 0) {
-    info.textContent = `Font size decreased by ${Math.abs(value)} pixels`;
-  } else {
-    info.textContent = 'Default font size';
-  }
-});
+    // Configuration button handler
+    const configBtn = document.getElementById('configBtn');
+    if (configBtn) {
+      configBtn.addEventListener('click', async function() {
+        const configUrl = browser.runtime.getURL('configuration.html');
+        const popupCheck = await isPopup();
+        
+        console.log('Is popup?', popupCheck); // Debug
+        
+        if (popupCheck) {
+          await openOrSwitchToTab(configUrl);
+          window.close();
+        } else {
+          window.location.href = configUrl;
+        }
+      });
+    } else {
+      console.warn('configBtn not found');
+    }
 
-// Configuration button handler
-document.getElementById('configBtn').addEventListener('click', async function() {
-  const configUrl = browser.runtime.getURL('configuration.html');
-  const popupCheck = await isPopup();
+    // Save button handler
+    const saveBtn = document.getElementById('saveBtn');
+    if (saveBtn) {
+      saveBtn.addEventListener('click', saveSettings);
+    } else {
+      console.warn('saveBtn not found');
+    }
+
+    // Reset button handler
+    const resetBtn = document.getElementById('resetBtn');
+    if (resetBtn) {
+      resetBtn.addEventListener('click', resetSettings);
+    } else {
+      console.warn('resetBtn not found');
+    }
+
+    // Clear cache button handler
+    const clearCache = document.getElementById('clearCache');
+    if (clearCache) {
+      clearCache.addEventListener('click', clearCache);
+    } else {
+      console.warn('clearCache not found');
+    }
+
+    // Display mode change handler
+    const displayMode = document.getElementById('displayMode');
+    if (displayMode) {
+      displayMode.addEventListener('change', function() {
+        const overlaySettings = document.getElementById('overlaySettings');
+        if (this.value === 'overlay') {
+          overlaySettings.style.display = 'block';
+        } else {
+          overlaySettings.style.display = 'none';
+        }
+      });
+    }
+
+    // Enable batch mode change handler
+    const enableBatchMode = document.getElementById('enableBatchMode');
+    if (enableBatchMode) {
+      enableBatchMode.addEventListener('change', function() {
+        if (this.checked) {
+          browser.tabs.query({active: true, currentWindow: true}).then(tabs => {
+            browser.tabs.sendMessage(tabs[0].id, {
+              action: 'startAutoTranslate'
+            }).catch(() => {});
+          });
+        } else {
+          browser.tabs.query({active: true, currentWindow: true}).then(tabs => {
+            browser.tabs.sendMessage(tabs[0].id, {
+              action: 'stopAutoTranslate'
+            }).catch(() => {});
+          });
+        }
+        
+        updateAutoTranslateStatus();
+      });
+    }
+
+    // Add event listeners for overlay options
+    const overlayTextColor = document.getElementById('overlayTextColor');
+    if (overlayTextColor) {
+      overlayTextColor.addEventListener('change', function() {
+        const customColorGroup = document.getElementById('customColorGroup');
+        if (this.value === 'custom') {
+          customColorGroup.style.display = 'block';
+        } else {
+          customColorGroup.style.display = 'none';
+        }
+      });
+    }
+
+    // Font size offset change handler
+    const fontSizeOffset = document.getElementById('fontSizeOffset');
+    if (fontSizeOffset) {
+      fontSizeOffset.addEventListener('change', function() {
+        const value = this.value;
+        const info = document.querySelector('label[for="fontSizeOffset"]').nextElementSibling;
+        if (value > 0) {
+          info.textContent = `Font size increased by ${value} pixels`;
+        } else if (value < 0) {
+          info.textContent = `Font size decreased by ${Math.abs(value)} pixels`;
+        } else {
+          info.textContent = 'Default font size';
+        }
+      });
+    }
+
+    // Opacity range handler
+    const opacityRange = document.getElementById('overlayOpacity');
+    if (opacityRange) {
+      opacityRange.addEventListener('input', function() {
+        document.getElementById('opacityValue').textContent = this.value + '%';
+      });
+    }
+  }, 0); // Use setTimeout with 0 delay to queue after current DOM mutations
   
-  console.log('Is popup?', popupCheck); // Debug
-  
-  if (popupCheck) {
-    await openOrSwitchToTab(configUrl);
-    window.close();
-  } else {
-    window.location.href = configUrl;
-  }
-});
-
-// Save button handler
-document.getElementById('saveBtn').addEventListener('click', saveSettings);
-
-// Reset button handler
-document.getElementById('resetBtn').addEventListener('click', resetSettings);
-
-// Clear cache button handler
-document.getElementById('clearCache').addEventListener('click', clearCache);
-
-// Display mode change handler
-document.getElementById('displayMode').addEventListener('change', function() {
-  const overlaySettings = document.getElementById('overlaySettings');
-  if (this.value === 'overlay') {
-    overlaySettings.style.display = 'block';
-  } else {
-    overlaySettings.style.display = 'none';
-  }
-});
-
-// Enable batch mode change handler
-document.getElementById('enableBatchMode').addEventListener('change', function() {
-  if (this.checked) {
-    browser.tabs.query({active: true, currentWindow: true}).then(tabs => {
-      browser.tabs.sendMessage(tabs[0].id, {
-        action: 'startAutoTranslate'
-      }).catch(() => {});
-    });
-  } else {
-    browser.tabs.query({active: true, currentWindow: true}).then(tabs => {
-      browser.tabs.sendMessage(tabs[0].id, {
-        action: 'stopAutoTranslate'
-      }).catch(() => {});
-    });
-  }
-  
-  updateAutoTranslateStatus();
-});
-
-// Add event listeners for overlay options
-document.getElementById('overlayTextColor').addEventListener('change', function() {
-  const customColorGroup = document.getElementById('customColorGroup');
-  if (this.value === 'custom') {
-    customColorGroup.style.display = 'block';
-  } else {
-    customColorGroup.style.display = 'none';
-  }
+  loadSettings(); // Call loadSettings after setup
 });
 
 // Update auto-translate status display

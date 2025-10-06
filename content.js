@@ -1,4 +1,4 @@
-//// Global variables
+// Global variables
 
 // SETTINGS & CONFIGURATION
 let settings = {};
@@ -38,6 +38,23 @@ let touchStartPos = { x: 0, y: 0 };
 // CLEANUP & DEBOUNCE
 let cleanupTimeout = null;
 
+async function sendMessageWithRetry(message, maxRetries = 3, delay = 500) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await browser.runtime.sendMessage(message);
+      return response;
+    } catch (error) {
+      console.warn(`Send message attempt ${attempt} failed:`, error.message);
+      if (error.message.includes('Extension context invalidated') && attempt < maxRetries) {
+        // Wait and retry to allow service worker to wake up
+        await new Promise(resolve => setTimeout(resolve, delay * attempt)); // Exponential backoff
+      } else {
+        throw error;
+      }
+    }
+  }
+}
+
 function getHoverButtons() {
   const now = Date.now();
   if (cachedHoverButtons && now - cacheTime < 1000) {
@@ -67,7 +84,7 @@ async function loadSettingsWithRetry(retries = 5, delay = 200) {
         return;
       }
       
-      const response = await browser.runtime.sendMessage({ action: 'getSettings' });
+      const response = await sendMessageWithRetry({ action: 'getSettings' });
       if (response && response.settings) {
         console.log('Settings loaded from background:', response.settings);
         settings = response.settings;
@@ -209,7 +226,7 @@ async function preloadCacheForAllImages() {
       
       imageArray.forEach(img => {
         const elementInfo = getElementInfo(img);
-        browser.runtime.sendMessage({
+        sendMessageWithRetry({
           action: 'applyCacheOnly',
           imageUrl: img.src,
           imageElement: elementInfo
@@ -327,7 +344,7 @@ function setupEnhancedImageObserver() {
       if (matchingImages.length > 0) {
         matchingImages.forEach(img => {
           const elementInfo = getElementInfo(img);
-          browser.runtime.sendMessage({
+          sendMessageWithRetry({
             action: 'applyCacheOnly',
             imageUrl: img.src,
             imageElement: elementInfo
@@ -697,7 +714,7 @@ async function translateSingleImage(img) {
       reject(new Error('Translation timeout'));
     }, 60000);
     
-    browser.runtime.sendMessage({
+    sendMessageWithRetry({
       action: 'translateImage',
       imageUrl: img.src,
       imageElement: elementInfo
@@ -754,7 +771,7 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.settings) {
       settings = message.settings;
     } else {
-      browser.runtime.sendMessage({ action: 'getSettings' }).then(response => {
+      sendMessageWithRetry({ action: 'getSettings' }).then(response => {
         settings = response.settings;
         setupFeatures();
       });
@@ -819,12 +836,17 @@ function translateSelectedImage() {
     
     const elementInfo = getElementInfo(selectedImage);
     
-    updateProcessIndicator('Translating selected image...', true, true);
+    updateProcessIndicator('Translating...', true, true);
     
-    browser.runtime.sendMessage({
+    // Send message to background script (same as hover button)
+    sendMessageWithRetry({
       action: 'translateImage',
       imageUrl: imageUrl,
       imageElement: elementInfo
+    }).catch(error => {
+      console.error('Error sending message to background:', error);
+      updateProcessIndicator('Translation failed', true, false);
+      setTimeout(() => hideProcessIndicator(), 3000);
     });
   }
 }
@@ -1408,17 +1430,13 @@ function addHoverButton(img) {
   }
   
   if (!img.complete || img.naturalWidth === 0) {
-    
-    
     const handleLoad = () => {
-      
       img.removeEventListener('load', handleLoad);
       img.removeEventListener('error', handleError);
       addHoverButton(img);
     };
     
     const handleError = () => {
-      
       img.removeEventListener('load', handleLoad);
       img.removeEventListener('error', handleError);
     };
@@ -1430,16 +1448,13 @@ function addHoverButton(img) {
   
   const existingButton = document.querySelector(`.comic-translator-hover-btn[data-for-image="${CSS.escape(img.src)}"]`);
   if (existingButton) {
-    
     return;
   }
   
   if (img.dataset.hasHoverButton === 'true') {
-    
     const allButtons = getHoverButtons();
     allButtons.forEach(btn => {
       if (btn.dataset.imgId === img.dataset.imgId) {
-        
         btn.remove();
       }
     });
@@ -1450,8 +1465,6 @@ function addHoverButton(img) {
   }
   
   img.dataset.hasHoverButton = 'true';
-  
-  
   
   const hoverButton = document.createElement('div');
   hoverButton.innerHTML = '🌐';
@@ -1488,7 +1501,31 @@ function addHoverButton(img) {
   hoverButton.addEventListener('click', (e) => {
     e.stopPropagation();
     selectedImage = img;
-    translateSelectedImage();
+    
+    // Use the same path as context menu - go through background script
+    const imageUrl = img.src;
+    if (imageUrl && imageUrl.startsWith('http')) {
+      if (img.dataset.miProcessed === 'true') {
+        console.log('Skipping already processed image');
+        return;
+      }
+      
+      const elementInfo = getElementInfo(img);
+      
+      updateProcessIndicator('Translating...', true, true);
+      
+      // Send message to background script
+      sendMessageWithRetry({
+        action: 'translateImage',
+        imageUrl: imageUrl,
+        imageElement: elementInfo
+      }).catch(error => {
+        console.error('Error sending message to background:', error);
+        updateProcessIndicator('Translation failed', true, false);
+        setTimeout(() => hideProcessIndicator(), 3000);
+      });
+    }
+    
     hoverButton.style.display = 'none';
   });
   

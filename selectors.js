@@ -1,18 +1,56 @@
+// selectors.js - Updated to wrap all event listeners in DOMContentLoaded
+
 let rules = [];
 
-document.addEventListener('DOMContentLoaded', loadRules);
+document.addEventListener('DOMContentLoaded', function() {
+  loadRules();
 
-document.getElementById('addRuleBtn').addEventListener('click', addNewRule);
-document.getElementById('saveBtn').addEventListener('click', saveRules);
-document.getElementById('exportBtn').addEventListener('click', exportRules);
-document.getElementById('importBtn').addEventListener('click', function() {
-  document.getElementById('importInput').click();
+  // Manage Selectors button handlers
+  const addRuleBtn = document.getElementById('addRuleBtn');
+  if (addRuleBtn) {
+    addRuleBtn.addEventListener('click', addNewRule);
+  } else {
+    console.warn('addRuleBtn not found');
+  }
+
+  const saveBtn = document.getElementById('saveBtn');
+  if (saveBtn) {
+    saveBtn.addEventListener('click', saveRules);
+  } else {
+    console.warn('saveBtn not found');
+  }
+
+  const exportBtn = document.getElementById('exportBtn');
+  if (exportBtn) {
+    exportBtn.addEventListener('click', exportRules);
+  } else {
+    console.warn('exportBtn not found');
+  }
+
+  const importBtn = document.getElementById('importBtn');
+  if (importBtn) {
+    importBtn.addEventListener('click', function() {
+      const importInput = document.getElementById('importInput');
+      if (importInput) {
+        importInput.click();
+      }
+    });
+  } else {
+    console.warn('importBtn not found');
+  }
+
+  const importInput = document.getElementById('importInput');
+  if (importInput) {
+    importInput.addEventListener('change', importRules);
+  } else {
+    console.warn('importInput not found');
+  }
+
+  const mobileSaveBtn = document.getElementById('mobileSaveBtn');
+  if (mobileSaveBtn) {
+    mobileSaveBtn.addEventListener('click', saveRules);
+  }
 });
-
-const mobileSaveBtn = document.getElementById('mobileSaveBtn');
-if (mobileSaveBtn) {
-  mobileSaveBtn.addEventListener('click', saveRules);
-}
 
 async function loadRules() {
   try {

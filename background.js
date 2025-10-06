@@ -1,9 +1,8 @@
-// Small notification, this is the last commit for manifest v2 to v3 migration.
-// After this, all commits will be for manifest v3 only.
-// Please make sure to test the extension thoroughly after this migration.
-// Thank you for your understanding!
-
 // Background script for Comic Image Translator Extension
+
+if (typeof importScripts !== 'undefined') {
+  importScripts('browser-polyfill.js');
+}
 
 const DEFAULT_SETTINGS = {
   backendUrl: 'http://127.0.0.1:8000',
@@ -13,6 +12,10 @@ const DEFAULT_SETTINGS = {
   inpainter: 'lama_large',
   renderer: 'manga2eng',
   displayMode: 'overlay',
+  inpaintingSize: 2048,
+  autoReduceInpainting: true,
+  showProcessIndicator: true,
+  fontSizeOffset: 0,
   selectorRules: [
     {
       enabled: true,
@@ -37,48 +40,45 @@ const DEFAULT_SETTINGS = {
   enableCache: true,
   skipProcessed: true,
   observeDynamicImages: true,
-  autoTranslate: true,
-  fontSizeOffset: 0
+  autoTranslate: true
 };
 
 let activeTranslations = new Map(); 
 let translationQueue = []; 
 let isProcessingQueue = false;
 
-browser.runtime.onInstalled.addListener(() => {
-  browser.storage.local.get('settings').then(result => {
-    if (!result.settings) {
-      browser.storage.local.set({ settings: DEFAULT_SETTINGS });
-    }
-  });
+// Service worker lifecycle: Log startup
+self.addEventListener('activate', (event) => {
+  console.log('Background service worker activated');
+  event.waitUntil(clients.claim());
+});
+
+// Initialize settings on install
+browser.runtime.onInstalled.addListener(async (details) => {
+  if (details.reason === 'install') {
+    await browser.storage.local.set({ settings: DEFAULT_SETTINGS });
+  }
   
-  if (typeof browser.contextMenus !== 'undefined') {
-    try {
-      createContextMenus();
-    } catch (e) {
-      console.log('Context menus not supported on this platform');
-    }
+  // Create context menu
+  try {
+    await browser.contextMenus.create({
+      id: "translate-manga-image",
+      title: "Translate Manga Image",
+      contexts: ["image"]
+    });
+  } catch (error) {
+    console.error('Error creating context menu:', error);
   }
 });
 
-function createContextMenus() {
-  try {
-    browser.contextMenus.create({
-      id: "translate-image",
-      title: "Translate Image",
-      contexts: ["image"]
-    });
-    
-    browser.contextMenus.onClicked.addListener((info, tab) => {
-      if (info.menuItemId === "translate-image") {
-        handleTranslationWithOOMRetry(info.srcUrl, tab.id, null, true);
-      }
-    });
-  } catch (e) {
-    console.log('Failed to setup context menus:', e);
+// Handle context menu clicks
+browser.contextMenus.onClicked.addListener((info, tab) => {
+  if (info.menuItemId === "translate-manga-image") {
+    handleTranslationWithOOMRetry(info.srcUrl, tab.id, null, true);
   }
-}
+});
 
+// Handle messages from content scripts and popup
 browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'updateProcessIndicator') {
     browser.tabs.sendMessage(sender.tab.id, {
@@ -110,17 +110,6 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'applyCacheOnly') {
     applyCacheIfExists(message.imageUrl, message.imageElement, sender.tab.id);
     sendResponse({ success: true });
-    return true;
-  }
-  
-  // Add navigation handler for mobile
-  if (message.action === 'navigateTo') {
-    browser.tabs.create({ url: message.url }).then(() => {
-      // Close the current tab if it's a popup/mobile tab
-      if (sender.tab) {
-        browser.tabs.remove(sender.tab.id).catch(() => {});
-      }
-    });
     return true;
   }
   
@@ -660,90 +649,19 @@ function overlayTextOnImage(textRegions, imageElement, tabId, originalImageUrl, 
   });
 }
 
-
-async function translateBatch(images, tabId) {
-  const { settings } = await browser.storage.local.get('settings');
-  const config = settings || DEFAULT_SETTINGS;
-  
-  browser.notifications.create({
-    type: 'basic',
-    iconUrl: 'icons/icon-48.png',
-    title: 'Comic Translator',
-    message: `Translating ${images.length} images...`
-  });
-  
-  let completed = 0;
-  for (const imgData of images) {
-    try {
-      if (config.displayMode === 'replace') {
-        const result = await sendToBackend(await fetchImage(imgData.url), config);
-        result.mode = 'replace';
-        replaceImageInPage(result.imageUrl, imgData.element, tabId, imgData.url);
-      } else if (config.displayMode === 'overlay') {
-        try {
-          const imageBlob = await fetchImage(imgData.url);
-          const jsonResult = await sendToBackendJson(imageBlob, config);
-          
-          if (jsonResult && jsonResult.translations && jsonResult.translations.length > 0) {
-            const textRegions = convertTranslationsToTextRegions(jsonResult.translations, config.targetLang);
-            
-            let cleanedImageUrl = null;
-            if (config.overlayMode === 'cleaned') {
-              const cleanedResult = await sendToBackend(imageBlob, config);
-              cleanedImageUrl = cleanedResult.imageUrl;
-              replaceImageInPage(cleanedImageUrl, imgData.element, tabId, imgData.url);
-            }
-            
-            const result = { textRegions, cleanedImageUrl, mode: 'overlay' };
-            overlayTextOnImage(textRegions, imgData.element, tabId, imgData.url, cleanedImageUrl);
-          } else {
-            console.warn(`No text regions found in image: ${imgData.url}`);
-            browser.tabs.sendMessage(tabId, {
-              action: 'markImageProcessed',
-              imageElement: imgData.element,
-              originalImageUrl: imgData.url,
-              status: 'error',
-              error: 'No text regions found'
-            }).catch(() => {});
-          }
-        } catch (e) {
-          console.warn(`JSON request failed for ${imgData.url}, falling back to image mode:`, e.message);
-          const result = await sendToBackend(await fetchImage(imgData.url), config);
-          result.mode = 'replace';
-          replaceImageInPage(result.imageUrl, imgData.element, tabId, imgData.url);
-        }
-      } else {
-        const result = await sendToBackend(await fetchImage(imgData.url), config);
-        result.mode = 'download';
-        displayResultInNewTab(result.imageUrl, tabId);
-      }
-      
-      completed++;
-      
-      if (completed % 5 === 0 || completed === images.length) {
-        browser.notifications.create({
-          type: 'basic',
-          iconUrl: 'icons/icon-48.png',
-          title: 'Comic Translator',
-          message: `Progress: ${completed}/${images.length} images`
+// Handle storage changes
+browser.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName === 'local' && changes.settings) {
+    // Notify all tabs about settings changes
+    browser.tabs.query({}).then(tabs => {
+      tabs.forEach(tab => {
+        browser.tabs.sendMessage(tab.id, {
+          action: 'reloadSettings',
+          settings: changes.settings.newValue
+        }).catch(() => {
+          // Ignore errors for tabs that don't have content script loaded
         });
-      }
-    } catch (error) {
-      console.error(`Error translating image ${imgData.url}:`, error.message);
-      browser.tabs.sendMessage(tabId, {
-        action: 'markImageProcessed',
-        imageElement: imgData.element,
-        originalImageUrl: imgData.url,
-        status: 'error',
-        error: error.message
-      }).catch(() => {});
-    }
+      });
+    });
   }
-  
-  browser.notifications.create({
-    type: 'basic',
-    iconUrl: 'icons/icon-48.png',
-    title: 'Comic Translator',
-    message: `Batch translation completed! (${completed}/${images.length})`
-  });
-}
+});

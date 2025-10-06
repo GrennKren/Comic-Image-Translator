@@ -1,0 +1,1132 @@
+/* ============================================
+   GLOBAL STYLES (SHARED)
+   ============================================ */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  font-size: 16px;
+}
+
+@media (max-width: 768px) {
+  html {
+    font-size: 14px;
+  }
+}
+
+/* WARNING: body has different styles in popup.html - renamed to .body-popup */
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  background: #f5f5f5;
+  padding: 20px;
+}
+
+@media (max-width: 768px) {
+  body {
+    padding: 0;
+    background: white;
+  }
+}
+
+/* WARNING: body styles from popup.html - different from configuration/selectors */
+.body-popup {
+  max-width: auto;
+  min-width: 320px;
+  padding: 15px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  margin: 0;
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
+
+
+/* ============================================
+   CONTAINER (SHARED)
+   ============================================ */
+
+.container {
+  max-width: 900px;
+  margin: 0 auto;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+  overflow: hidden;
+}
+
+@media (max-width: 768px) {
+  .container {
+    border-radius: 0;
+    box-shadow: none;
+  }
+}
+
+/* WARNING: .container from selectors.html has different max-width */
+.container-selectors {
+  max-width: 1200px;
+  margin: 0 auto;
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+  overflow: hidden;
+}
+
+@media (max-width: 768px) {
+  .container-selectors {
+    border-radius: 0;
+    box-shadow: none;
+  }
+}
+
+
+/* ============================================
+   HEADER (SHARED)
+   ============================================ */
+
+/* WARNING: .header from configuration.html - different from selectors.html */
+.header-config {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 30px;
+}
+
+@media (max-width: 768px) {
+  .header-config {
+    padding: 15px;
+  }
+}
+
+.header-config h1 {
+  font-size: 1.75rem;
+  margin-bottom: 10px;
+}
+
+@media (max-width: 768px) {
+  .header-config h1 {
+    font-size: 1.25rem;
+    margin-bottom: 5px;
+  }
+}
+
+.header-config p {
+  opacity: 0.9;
+  font-size: 0.875rem;
+}
+
+@media (max-width: 768px) {
+  .header-config p {
+    font-size: 0.75rem;
+  }
+}
+
+/* WARNING: .header from selectors.html - different layout from configuration */
+.header-selectors {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 20px 30px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+@media (max-width: 768px) {
+  .header-selectors {
+    padding: 15px;
+    padding-bottom: 0;
+  }
+}
+
+.header-selectors h1 {
+  font-size: 24px;
+}
+
+@media (max-width: 768px) {
+  .header-selectors h1 {
+    font-size: 18px;
+    width: 100%;
+  }
+}
+
+
+/* ============================================
+   HEADER BUTTONS (SELECTORS)
+   ============================================ */
+
+.header-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+@media (max-width: 768px) {
+  .header-buttons {
+    display: none;
+    width: 100%;
+  }
+  
+  .header-buttons .btn {
+    flex: 1;
+  }
+}
+
+.mobile-save-btn {
+  display: none;
+  position: sticky;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 15px;
+  background: white;
+  border-top: 1px solid #dee2e6;
+  box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
+  z-index: 100;
+}
+
+@media (max-width: 768px) {
+  .mobile-save-btn {
+    display: block;
+  }
+  
+  .mobile-save-btn .btn {
+    width: 100%;
+    padding: 12px;
+    font-size: 14px;
+  }
+}
+
+
+/* ============================================
+   CONTENT (SHARED)
+   ============================================ */
+
+/* WARNING: .content has different padding in configuration vs selectors */
+.content-config {
+  padding: 30px;
+}
+
+@media (max-width: 768px) {
+  .content-config {
+    padding: 10px;
+  }
+}
+
+.content-selectors {
+  padding: 30px;
+}
+
+@media (max-width: 768px) {
+  .content-selectors {
+    padding: 10px;
+  }
+}
+
+
+/* ============================================
+   BUTTONS (SHARED)
+   ============================================ */
+
+.btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+@media (max-width: 768px) {
+  .btn {
+    padding: 10px 12px;
+    font-size: 12px;
+  }
+}
+
+.btn:hover {
+  opacity: 0.9;
+}
+
+.btn-primary {
+  background: white;
+  color: #667eea;
+}
+
+.btn-secondary {
+  background: rgba(255,255,255,0.9);
+  color: brown;
+  border: 1px solid rgba(255,255,255,0.3);
+}
+
+.btn-secondary:hover {
+  background: white;
+}
+
+/* WARNING: .btn-primary from popup.html - different colors */
+.btn-primary-popup {
+  background-color: #4A90E2;
+  color: white;
+  flex: 1;
+  padding: 10px;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-primary-popup:hover {
+  background-color: #357ABD;
+}
+
+/* WARNING: .btn-secondary from popup.html - different colors */
+.btn-secondary-popup {
+  background-color: #f0f0f0;
+  color: #333;
+  flex: 1;
+  padding: 10px;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.btn-secondary-popup:hover {
+  background-color: #e0e0e0;
+}
+
+.btn-delete {
+  padding: 6px 16px;
+  font-size: 12px;
+  background: #dc3545;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  .btn-delete {
+    padding: 6px 12px;
+    font-size: 11px;
+  }
+}
+
+.btn-delete:hover {
+  background: #c82333;
+}
+
+
+/* ============================================
+   INFO BOX (SHARED)
+   ============================================ */
+
+/* WARNING: .info-box has different styles in configuration vs selectors */
+.info-box-config {
+  background: #e7f3ff;
+  border-left: 4px solid #4A90E2;
+  padding: 15px;
+  margin-bottom: 20px;
+  border-radius: 4px;
+}
+
+@media (max-width: 768px) {
+  .info-box-config {
+    padding: 10px;
+    margin-bottom: 10px;
+    border-left-width: 3px;
+  }
+}
+
+.info-box-config h3 {
+  font-size: 0.875rem;
+  color: #2c5aa0;
+  margin-bottom: 8px;
+}
+
+@media (max-width: 768px) {
+  .info-box-config h3 {
+    font-size: 0.8125rem;
+  }
+}
+
+.info-box-config p {
+  font-size: 0.8125rem;
+  color: #555;
+  line-height: 1.5;
+}
+
+@media (max-width: 768px) {
+  .info-box-config p {
+    font-size: 0.75rem;
+    line-height: 1.4;
+  }
+}
+
+.info-box-config ul {
+  margin: 10px 0 0 20px;
+  font-size: 0.8125rem;
+  color: #555;
+}
+
+@media (max-width: 768px) {
+  .info-box-config ul {
+    font-size: 0.75rem;
+    margin-left: 15px;
+  }
+}
+
+.info-box-config li {
+  margin-bottom: 5px;
+}
+
+.info-box-selectors {
+  background: #e7f3ff;
+  border-left: 4px solid #4A90E2;
+  padding: 12px 15px;
+  margin-bottom: 20px;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #555;
+  line-height: 1.6;
+}
+
+@media (max-width: 768px) {
+  .info-box-selectors {
+    padding: 10px;
+    font-size: 11px;
+    margin-bottom: 15px;
+  }
+}
+
+
+/* ============================================
+   SECTION (CONFIGURATION)
+   ============================================ */
+
+.section {
+  margin-bottom: 30px;
+}
+
+@media (max-width: 768px) {
+  .section {
+    margin-bottom: 15px;
+  }
+}
+
+.section-title {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #333;
+  margin-bottom: 15px;
+  padding-bottom: 10px;
+  border-bottom: 2px solid #667eea;
+}
+
+@media (max-width: 768px) {
+  .section-title {
+    font-size: 1rem;
+    margin-bottom: 10px;
+    padding-bottom: 5px;
+  }
+}
+
+
+/* ============================================
+   TRANSLATOR TABLE (CONFIGURATION)
+   ============================================ */
+
+.translator-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 15px;
+  font-size: 0.8125rem;
+}
+
+@media (max-width: 768px) {
+  .translator-table {
+    font-size: 0.6875rem;
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .translator-table thead,
+  .translator-table tbody,
+  .translator-table tr {
+    display: table;
+    width: 100%;
+    table-layout: fixed;
+  }
+}
+
+.translator-table th {
+  background: #f8f9fa;
+  padding: 12px 8px;
+  text-align: left;
+  font-weight: 600;
+  color: #333;
+  border-bottom: 2px solid #dee2e6;
+}
+
+@media (max-width: 768px) {
+  .translator-table th {
+    padding: 6px 4px;
+  }
+}
+
+.translator-table td {
+  padding: 10px 8px;
+  border-bottom: 1px solid #dee2e6;
+}
+
+@media (max-width: 768px) {
+  .translator-table td {
+    padding: 6px 4px;
+  }
+}
+
+.translator-table tr:hover {
+  background: #f8f9fa;
+}
+
+
+/* ============================================
+   BADGES (CONFIGURATION)
+   ============================================ */
+
+.badge {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+@media (max-width: 768px) {
+  .badge {
+    padding: 2px 5px;
+    font-size: 0.625rem;
+  }
+}
+
+.badge-offline {
+  background: #d4edda;
+  color: #155724;
+}
+
+.badge-api {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.badge-new {
+  background: #007bff;
+  color: white;
+}
+
+.rule-badge {
+  background: #ffc107;
+  color: #333;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 10px;
+  font-weight: 600;
+  margin-left: 8px;
+}
+
+@media (max-width: 768px) {
+  .rule-badge {
+    font-size: 9px;
+    padding: 2px 6px;
+  }
+}
+
+.priority-badge {
+  background: #4A90E2;
+  color: white;
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  margin-left: 8px;
+}
+
+
+/* ============================================
+   CODE ELEMENTS (CONFIGURATION)
+   ============================================ */
+
+.code {
+  background: #f4f4f4;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.75rem;
+  color: #e83e8c;
+  word-break: break-all;
+}
+
+@media (max-width: 768px) {
+  .code {
+    font-size: 0.6875rem;
+    padding: 2px 4px;
+  }
+}
+
+.command-box {
+  background: #2d2d2d;
+  color: #f8f8f2;
+  padding: 15px;
+  border-radius: 6px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.75rem;
+  overflow-x: auto;
+  margin: 10px 0;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 768px) {
+  .command-box {
+    padding: 8px;
+    font-size: 0.6875rem;
+  }
+}
+
+.command-box code {
+  color: #a6e22e;
+}
+
+.env-var {
+  background: #e9ecef;
+  padding: 4px 8px;
+  border-radius: 3px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.6875rem;
+  color: #495057;
+  word-break: break-all;
+}
+
+@media (max-width: 768px) {
+  .env-var {
+    font-size: 0.625rem;
+    padding: 2px 5px;
+  }
+}
+
+
+/* ============================================
+   SETUP STEPS (CONFIGURATION)
+   ============================================ */
+
+.setup-steps {
+  background: #fff9e6;
+  border-left: 4px solid #ffc107;
+  padding: 15px;
+  margin: 15px 0;
+  border-radius: 4px;
+}
+
+@media (max-width: 768px) {
+  .setup-steps {
+    padding: 10px;
+    margin: 10px 0;
+  }
+}
+
+.setup-steps h4 {
+  color: #856404;
+  margin-bottom: 10px;
+  font-size: 0.875rem;
+}
+
+@media (max-width: 768px) {
+  .setup-steps h4 {
+    font-size: 0.8125rem;
+  }
+}
+
+.setup-steps ol {
+  margin-left: 20px;
+  color: #666;
+  font-size: 0.8125rem;
+  line-height: 1.6;
+}
+
+@media (max-width: 768px) {
+  .setup-steps ol {
+    font-size: 0.75rem;
+    margin-left: 15px;
+    line-height: 1.5;
+  }
+}
+
+
+/* ============================================
+   API SETUP (CONFIGURATION)
+   ============================================ */
+
+.api-setup {
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  padding: 15px;
+  margin: 10px 0;
+}
+
+@media (max-width: 768px) {
+  .api-setup {
+    padding: 8px;
+  }
+}
+
+.api-setup h4 {
+  color: #495057;
+  margin-bottom: 10px;
+  font-size: 0.875rem;
+}
+
+@media (max-width: 768px) {
+  .api-setup h4 {
+    font-size: 0.8125rem;
+  }
+}
+
+.api-setup ol {
+  margin-left: 20px;
+  font-size: 0.8125rem;
+}
+
+@media (max-width: 768px) {
+  .api-setup ol {
+    margin-left: 15px;
+    font-size: 0.75rem;
+  }
+}
+
+
+/* ============================================
+   WARNING (CONFIGURATION)
+   ============================================ */
+
+.warning {
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  color: #856404;
+  padding: 12px;
+  border-radius: 4px;
+  margin: 15px 0;
+  font-size: 0.8125rem;
+}
+
+@media (max-width: 768px) {
+  .warning {
+    padding: 8px;
+    font-size: 0.75rem;
+  }
+}
+
+
+/* ============================================
+   FOOTER (CONFIGURATION)
+   ============================================ */
+
+.footer {
+  background: #f8f9fa;
+  padding: 20px 30px;
+  text-align: center;
+  color: #666;
+  font-size: 0.8125rem;
+}
+
+@media (max-width: 768px) {
+  .footer {
+    padding: 15px 10px;
+    font-size: 0.75rem;
+    line-height: 1.5;
+  }
+}
+
+.footer a {
+  color: #667eea;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.footer a:hover {
+  text-decoration: underline;
+}
+
+
+/* ============================================
+   TOOLBAR (SELECTORS)
+   ============================================ */
+
+.toolbar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 768px) {
+  .toolbar {
+    flex-direction: column;
+  }
+  
+  .toolbar .btn,
+  .toolbar .file-input-wrapper {
+    width: 100%;
+  }
+  
+  .toolbar .file-input-wrapper .btn {
+    width: 100%;
+  }
+}
+
+
+/* ============================================
+   RULES (SELECTORS)
+   ============================================ */
+
+.rules-container {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.rule-card {
+  background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 15px;
+  transition: box-shadow 0.2s;
+}
+
+.rule-card:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+@media (max-width: 768px) {
+  .rule-card {
+    padding: 12px;
+  }
+}
+
+.rule-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.rule-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rule-toggle input[type="checkbox"] {
+  width: 20px;
+  height: 20px;
+  cursor: pointer;
+}
+
+@media (max-width: 768px) {
+  .rule-toggle input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+  }
+}
+
+.rule-toggle label {
+  font-weight: 600;
+  font-size: 14px;
+  color: #333;
+  cursor: pointer;
+}
+
+@media (max-width: 768px) {
+  .rule-toggle label {
+    font-size: 12px;
+  }
+}
+
+.rule-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.rule-field {
+  margin-bottom: 10px;
+}
+
+.rule-field:last-child {
+  margin-bottom: 0;
+}
+
+.rule-field label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: #555;
+  margin-bottom: 5px;
+}
+
+@media (max-width: 768px) {
+  .rule-field label {
+    font-size: 11px;
+  }
+}
+
+.rule-field input[type="text"] {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: 'Courier New', monospace;
+}
+
+@media (max-width: 768px) {
+  .rule-field input[type="text"] {
+    padding: 10px 8px;
+    font-size: 12px;
+  }
+}
+
+.rule-field input[type="text"]:focus {
+  outline: none;
+  border-color: #4A90E2;
+}
+
+.rule-field input[type="text"][readonly] {
+  background: #e9ecef;
+  cursor: not-allowed;
+}
+
+
+/* ============================================
+   EMPTY STATE (SELECTORS)
+   ============================================ */
+
+.empty-state {
+  text-align: center;
+  padding: 40px;
+  color: #999;
+}
+
+@media (max-width: 768px) {
+  .empty-state {
+    padding: 30px 15px;
+    font-size: 14px;
+  }
+}
+
+
+/* ============================================
+   STATUS (SHARED)
+   ============================================ */
+
+/* WARNING: .status has different styles in configuration/selectors vs popup */
+.status-config {
+  padding: 10px 15px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+  font-size: 13px;
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .status-config {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+}
+
+.status-config.success {
+  background-color: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.status-config.error {
+  background-color: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+.status-popup {
+  padding: 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  text-align: center;
+  margin-top: 10px;
+  display: none;
+}
+
+.status-popup.success {
+  background-color: #d4edda;
+  color: #155724;
+  border: 1px solid #c3e6cb;
+}
+
+.status-popup.error {
+  background-color: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+
+
+/* ============================================
+   FILE INPUT (SELECTORS)
+   ============================================ */
+
+.file-input-wrapper {
+  position: relative;
+  overflow: hidden;
+  display: inline-block;
+}
+
+.file-input-wrapper input[type=file] {
+  position: absolute;
+  left: -9999px;
+}
+
+
+/* ============================================
+   POPUP SPECIFIC STYLES
+   ============================================ */
+
+.popup-h2 {
+  margin: 0 0 15px 0;
+  font-size: 18px;
+  color: #333;
+}
+
+.setting-group {
+  margin-bottom: 15px;
+}
+
+/* WARNING: label from popup has different styles than rule-field label */
+.setting-group label {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #555;
+}
+
+.setting-group input,
+.setting-group select,
+.setting-group textarea {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+
+.setting-group input:focus,
+.setting-group select:focus,
+.setting-group textarea:focus {
+  outline: none;
+  border-color: #4A90E2;
+}
+
+.checkbox-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.checkbox-group input[type="checkbox"] {
+  width: auto;
+}
+
+.button-group {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.info {
+  font-size: 11px;
+  color: #777;
+  margin-top: 5px;
+  font-style: italic;
+}
+
+.collapsible {
+  background: #f9f9f9;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+
+.collapsible-header {
+  background: #f0f0f0;
+  padding: 12px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  user-select: none;
+  transition: background-color 0.2s;
+}
+
+.collapsible-header:hover {
+  background: #e8e8e8;
+}
+
+.collapsible-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+}
+
+.collapsible-arrow {
+  transition: transform 0.3s;
+  font-size: 12px;
+  color: #666;
+}
+
+.collapsible-arrow.open {
+  transform: rotate(180deg);
+}
+
+.collapsible-content {
+  padding: 15px;
+  display: none;
+}
+
+.collapsible-content.open {
+  display: block;
+}
+
+.cache-info {
+  font-size: 11px;
+  color: #666;
+  margin-top: 5px;
+  padding: 5px;
+  background-color: #f0f0f0;
+  border-radius: 3px;
+}
+
+.auto-translate-status {
+  font-size: 11px;
+  color: #4A90E2;
+  margin-top: 5px;
+  font-weight: 600;
+}
