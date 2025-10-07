@@ -25,7 +25,7 @@ const DEFAULT_SETTINGS = {
       id: Date.now() + 1
     }
   ],
-  enableBatchMode: true,
+  autoTranslate: false,
   overlayMode: 'colored',
   overlayOpacity: 90,
   overlayTextColor: 'auto',
@@ -34,7 +34,6 @@ const DEFAULT_SETTINGS = {
   enableCache: true,
   skipProcessed: true,
   observeDynamicImages: true,
-  autoTranslate: true
 };
 
 // Load settings on popup open
@@ -146,9 +145,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Enable batch mode change handler
-    const enableBatchMode = document.getElementById('enableBatchMode');
-    if (enableBatchMode) {
-      enableBatchMode.addEventListener('change', function() {
+    const autoTranslate = document.getElementById('autoTranslate');
+    if (autoTranslate) {
+      autoTranslate.addEventListener('change', function() {
         if (this.checked) {
           browser.tabs.query({active: true, currentWindow: true}).then(tabs => {
             browser.tabs.sendMessage(tabs[0].id, {
@@ -211,7 +210,7 @@ document.addEventListener('DOMContentLoaded', function() {
 // Update auto-translate status display
 function updateAutoTranslateStatus() {
   const statusElement = document.getElementById('autoTranslateStatus');
-  const isEnabled = document.getElementById('enableBatchMode').checked;
+  const isEnabled = document.getElementById('autoTranslate').checked;
   
   if (isEnabled) {
     statusElement.textContent = 'Status: Active';
@@ -234,7 +233,7 @@ async function loadSettings() {
     
     document.getElementById('backendUrl').value = settings.backendUrl;
     document.getElementById('displayMode').value = settings.displayMode;
-    document.getElementById('enableBatchMode').checked = settings.enableBatchMode;
+    document.getElementById('autoTranslate').checked = settings.autoTranslate;
     document.getElementById('translator').value = settings.translator;
     document.getElementById('targetLang').value = settings.targetLang;
     document.getElementById('detector').value = settings.detector;
@@ -285,7 +284,7 @@ async function saveSettings() {
       backendUrl: document.getElementById('backendUrl').value.trim(),
       displayMode: document.getElementById('displayMode').value,
       selectorRules: (await browser.storage.local.get('settings')).settings?.selectorRules || DEFAULT_SETTINGS.selectorRules,
-      enableBatchMode: document.getElementById('enableBatchMode').checked,
+      autoTranslate: document.getElementById('autoTranslate').checked,
       translator: document.getElementById('translator').value,
       targetLang: document.getElementById('targetLang').value,
       detector: document.getElementById('detector').value,
@@ -299,7 +298,6 @@ async function saveSettings() {
       enableCache: document.getElementById('enableCache').checked,
       skipProcessed: document.getElementById('skipProcessed').checked,
       observeDynamicImages: document.getElementById('observeDynamicImages').checked,
-      autoTranslate: true,
       inpaintingSize: parseInt(document.getElementById('inpaintingSize').value),
       autoReduceInpainting: document.getElementById('autoReduceInpainting').value === 'true',
       showProcessIndicator: document.getElementById('showProcessIndicator').value === 'true',

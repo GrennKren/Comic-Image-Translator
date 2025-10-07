@@ -513,6 +513,40 @@
           ⚠️ <strong>Note:</strong> Settings in the extension popup override config.json values. Use config.json for default values that can be overridden by the extension UI.
         </div>
       </div>
+
+      <div class="section">
+        <div class="section-title">📚 Batch Translation</div>
+        
+        <div class="info-box-config">
+          <h3>Translate All Images</h3>
+          <p>The extension now supports batch translation of multiple images at once:</p>
+          <ul>
+            <li><strong>Desktop:</strong> Right-click on any page and select "Translate All Images"</li>
+            <li><strong>Mobile:</strong> Long-press on any image and select "Translate All Images"</li>
+          </ul>
+        </div>
+        
+        <div class="info-box-config">
+          <h3>Webtoon Support</h3>
+          <p>Special handling for webtoon-style horizontal scrolling content:</p>
+          <ul>
+            <li><strong>Dynamic Loading:</strong> Images are translated as they load, no need to wait for all images</li>
+            <li><strong>Progress Tracking:</strong> Real-time progress indicator shows "Translating X/Y pages"</li>
+            <li><strong>Smart Processing:</strong> Automatically detects webtoon-style content and adjusts processing accordingly</li>
+          </ul>
+        </div>
+        
+        <div class="info-box-config">
+          <h3>Batch Processing</h3>
+          <p>How batch translation works:</p>
+          <ul>
+            <li><strong>Selector Based:</strong> Only images matching your configured selectors will be translated</li>
+            <li><strong>Memory Efficient:</strong> Processes images in small batches (4 images at a time)</li>
+            <li><strong>Error Resilient:</strong> If one image fails, others continue processing</li>
+            <li><strong>Cache Aware:</strong> Uses cached translations when available</li>
+          </ul>
+        </div>
+      </div>
     </div>
     
     <div class="footer">

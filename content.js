@@ -109,7 +109,7 @@ async function loadSettingsWithRetry(retries = 5, delay = 200) {
     inpainter: 'lama_large',
     renderer: 'manga2eng',
     displayMode: 'overlay',
-    enableBatchMode: true,
+    autoTranslate: false,
     overlayMode: 'colored',
     overlayOpacity: 90,
     overlayTextColor: 'auto',
@@ -118,7 +118,6 @@ async function loadSettingsWithRetry(retries = 5, delay = 200) {
     enableCache: true,
     skipProcessed: true,
     observeDynamicImages: true,
-    autoTranslate: true,
     showProcessIndicator: true,
     fontSizeOffset: 0
   };
@@ -158,7 +157,7 @@ function setupFeatures() {
     preloadCacheForAllImages();
   }
   
-  if (settings.enableBatchMode && currentSelector) {
+  if (settings.autoTranslate && currentSelector) {
     startAutoTranslation();
   } 
   
@@ -266,7 +265,7 @@ function cleanupOrphanedHoverButtons() {
 }
 
 function setupEnhancedImageObserver() {
-  console.log('Setting up enhanced image observer');
+  console.log('Setting up enhanced image observer for webtoon support');
   
   let observerTimeout = null;
   let pendingMutations = [];
@@ -304,7 +303,8 @@ function setupEnhancedImageObserver() {
               });
             }
             
-            const lazyImages = node.querySelectorAll('img[data-src], img[data-lazy-src]');
+            // Special handling for lazy-loaded images in webtoon
+            const lazyImages = node.querySelectorAll('img[data-src], img[data-lazy-src], img[data-original]');
             if (lazyImages && lazyImages.length > 0) {
               lazyImages.forEach(img => {
                 if (shouldProcessImage(img)) {
@@ -319,7 +319,10 @@ function setupEnhancedImageObserver() {
       if (mutation.type === 'attributes') {
         const target = mutation.target;
         if (target.tagName === 'IMG') {
-          if (mutation.attributeName === 'src' || mutation.attributeName === 'data-src') {
+          if (mutation.attributeName === 'src' || 
+              mutation.attributeName === 'data-src' || 
+              mutation.attributeName === 'data-lazy-src' ||
+              mutation.attributeName === 'data-original') {
             if (shouldProcessImage(target)) {
               newImages.push(target);
             }
@@ -335,24 +338,40 @@ function setupEnhancedImageObserver() {
     }
     
     if (newImages.length > 0) {
-      console.log('New images detected by observer', newImages.length);
+      console.log('New images detected by observer:', newImages.length);
       
-      const matchingImages = newImages.filter(img => img.matches(currentSelector));
+      // For webtoon-style content, process images as they become available
+      const isWebtoonPage = document.querySelector('.webtoon') || 
+                           document.querySelector('[class*="webtoon"]') ||
+                           document.querySelector('[class*="comic"]') ||
+                           document.querySelector('[class*="manga"]');
       
-      if (matchingImages.length > 0) {
-        matchingImages.forEach(img => {
-          const elementInfo = getElementInfo(img);
-          sendMessageWithRetry({
-            action: 'applyCacheOnly',
-            imageUrl: img.src,
-            imageElement: elementInfo
-          }).catch(() => {});
-        });
-        
-        if (autoTranslateEnabled) {
-          matchingImages.forEach(img => {
+      if (isWebtoonPage && autoTranslateEnabled) {
+        // Process images immediately for webtoon
+        newImages.forEach(img => {
+          if (img.matches(currentSelector)) {
             queueImageForTranslation(img);
+          }
+        });
+      } else {
+        // Regular processing for non-webtoon content
+        const matchingImages = newImages.filter(img => img.matches(currentSelector));
+        
+        if (matchingImages.length > 0) {
+          matchingImages.forEach(img => {
+            const elementInfo = getElementInfo(img);
+            sendMessageWithRetry({
+              action: 'applyCacheOnly',
+              imageUrl: img.src,
+              imageElement: elementInfo
+            }).catch(() => {});
           });
+          
+          if (autoTranslateEnabled) {
+            matchingImages.forEach(img => {
+              queueImageForTranslation(img);
+            });
+          }
         }
       }
     }
@@ -366,19 +385,20 @@ function setupEnhancedImageObserver() {
     observerTimeout = setTimeout(() => {
       observerTimeout = null;
       processMutations();
-    }, 100);
+    }, 100); // Faster response for webtoon content
   });
   
+  // Observe more attributes for webtoon support
   imageObserver.observe(document.body, {
     childList: true,
     subtree: true,
     attributes: true,
-    attributeFilter: ['src', 'data-src', 'data-lazy-src'],
+    attributeFilter: ['src', 'data-src', 'data-lazy-src', 'data-original', 'class'],
     characterData: false,
     attributeOldValue: false
   });
   
-  console.log('Enhanced image observer started');
+  console.log('Enhanced image observer started with webtoon support');
 }
 
 function setupPageChangeObserver() {
@@ -516,20 +536,100 @@ function translateImagesWithSelector(selector) {
   }
 }
 
+async function startBatchTranslation() {
+  // Get current selector from settings
+  currentSelector = getActiveSelectors();
+  
+  if (!currentSelector) {
+    console.log('No active selector for current domain');
+    updateProcessIndicator('No selector configured for this site', true, false);
+    setTimeout(() => hideProcessIndicator(), 3000);
+    return;
+  }
+  
+  console.log('Starting batch translation with selector:', currentSelector);
+  
+  // Get all images matching the selector
+  const images = Array.from(document.querySelectorAll(currentSelector));
+  
+  if (images.length === 0) {
+    updateProcessIndicator('No images found matching selector', true, false);
+    setTimeout(() => hideProcessIndicator(), 3000);
+    return;
+  }
+  
+  // Filter images that need translation
+  const imagesToTranslate = images.filter(img => shouldProcessImage(img));
+  
+  if (imagesToTranslate.length === 0) {
+    updateProcessIndicator('All matching images already translated', true, false);
+    setTimeout(() => hideProcessIndicator(), 3000);
+    return;
+  }
+  
+  console.log(`Found ${imagesToTranslate.length} images to translate with selector: ${currentSelector}`);
+  
+  // Show initial progress
+  updateProcessIndicator(`Preparing to translate ${imagesToTranslate.length} images...`, true, true);
+  
+  // Extract image URLs
+  const imageUrls = imagesToTranslate.map(img => img.src || img.dataset.src).filter(url => url);
+  
+  if (imageUrls.length === 0) {
+    updateProcessIndicator('No valid image URLs found', true, false);
+    setTimeout(() => hideProcessIndicator(), 3000);
+    return;
+  }
+  
+  // Send batch translation request to background script
+  try {
+    await sendMessageWithRetry({
+      action: 'translateBatch',
+      imageUrls: imageUrls
+    });
+    
+    // Mark images as being processed
+    imagesToTranslate.forEach(img => {
+      img.dataset.miProcessing = 'true';
+      img.style.outline = '2px solid #4A90E2';
+    });
+    
+  } catch (error) {
+    console.error('Error starting batch translation:', error);
+    updateProcessIndicator('Error starting batch translation', true, false);
+    setTimeout(() => hideProcessIndicator(), 3000);
+  }
+}
+
+// Update shouldProcessImage to handle webtoon-style loading
 function shouldProcessImage(img) {
   if (img.dataset.miProcessed === 'true') {
     return false;
   }
   
-  if (!img.src || !img.src.startsWith('http')) {
-    if (!img.dataset.src || !img.dataset.src.startsWith('http')) {
-      return false;
-    }
+  // Check if image has a valid source
+  const src = img.src || img.dataset.src || img.dataset.lazySrc;
+  if (!src || !src.startsWith('http')) {
+    return false;
   }
   
-  if (img.naturalWidth > 0 && img.naturalHeight > 0) {
-    if (img.naturalWidth < 100 || img.naturalHeight < 100) {
-      return false;
+  // For webtoon-style content, be more lenient with size requirements
+  const isWebtoonStyle = img.closest('.webtoon') || 
+                         img.closest('[class*="webtoon"]') ||
+                         img.closest('[class*="comic"]') ||
+                         img.closest('[class*="manga"]');
+  
+  if (isWebtoonStyle) {
+    // For webtoon, allow smaller images as they might be panels
+    if (img.naturalWidth > 50 && img.naturalHeight > 50) {
+      return true;
+    }
+  } else {
+    // Regular size requirements for non-webtoon content
+    if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+      if (img.naturalWidth < 100 || img.naturalHeight < 100) {
+        return false;
+      }
     }
   }
   
@@ -539,6 +639,7 @@ function shouldProcessImage(img) {
   
   return true;
 }
+
 
 function queueImageForTranslation(img) {
   translationQueue.add(img);
@@ -560,16 +661,22 @@ async function processTranslationQueue() {
   }
   
   isProcessing = true;
+  const totalImages = translationQueue.size;
+  let processedImages = 0;
   
-  updateProcessIndicator(`Translating ${translationQueue.size} image${translationQueue.size > 1 ? 's' : ''}...`, true, true);
+  updateProcessIndicator(`Translating ${processedImages}/${totalImages} images...`, true, true);
   
   for (const img of translationQueue) {
     try {
-      updateProcessIndicator(`Translating... (${translationQueue.size} remaining)`, true, true);
+      processedImages++;
+      updateProcessIndicator(`Translating ${processedImages}/${totalImages} images...`, true, true);
+      
       await translateSingleImage(img);
       translationQueue.delete(img);
       
-      await new Promise(resolve => setTimeout(resolve, 300));
+      // Small delay to prevent overwhelming the browser
+      await new Promise(resolve => setTimeout(resolve, 200));
+      
     } catch (error) {
       console.error('Error translating image:', error);
       markImageAsProcessed(img, 'error', error.message);
@@ -578,7 +685,7 @@ async function processTranslationQueue() {
   }
   
   isProcessing = false;
-  updateProcessIndicator('All translations completed', true, false);
+  updateProcessIndicator(`Completed ${processedImages}/${totalImages} translations`, true, false);
   setTimeout(() => hideProcessIndicator(), 2000);
   
   if (translationQueue.size > 0) {
@@ -792,6 +899,31 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     updateProcessIndicator(message.text);
   } else if (message.action === 'hideProcessIndicator') {
     hideProcessIndicator();
+  } else if (message.action === 'startBatchTranslation') {
+    startBatchTranslation();
+    return true;
+  } else if (message.action === 'getActiveSelectorAndCheckElements') {
+    try {
+      // Use existing getActiveSelectors function
+      console.log("bruh");
+      const activeSelector = getActiveSelectors();
+      console.log("activeSelectornya");
+      console.log(!activeSelector);
+      if (!activeSelector) {
+        console.log('tidak ada element');
+        sendResponse({ hasElements: false });
+        return;
+      }else{
+        console.log('ada element');
+      }
+      
+      const elements = document.querySelectorAll(activeSelector);
+      sendResponse({ hasElements: elements.length > 0 });
+    } catch (error) {
+      console.error('Error checking elements:', error);
+      sendResponse({ hasElements: false });
+    }
+    return true; // Keep message channel open for async response
   }
   
   return true;
@@ -1550,7 +1682,7 @@ document.addEventListener('DOMContentLoaded', () => {
 //}
 
 function setupMobileLongPress() {
-  console.log('[MOBILE] Setting up long-press detection');
+  console.log('[MOBILE] Setting up long-press detection with batch support');
   
   document.body.addEventListener('touchstart', (e) => {
     const touch = e.touches[0];
@@ -1569,7 +1701,8 @@ function setupMobileLongPress() {
           navigator.vibrate(50);
         }
         
-        showTranslatePrompt(img);
+        // For mobile, show both single image and batch options
+        showMobileTranslateOptions(img);
       }
     }, 500);
   }, { passive: true });
@@ -1589,6 +1722,100 @@ function setupMobileLongPress() {
       clearTimeout(longPressTimer);
     }
   }, { passive: true });
+}
+
+function showMobileTranslateOptions(img) {
+  // Check if we have active selectors before showing options
+  currentSelector = getActiveSelectors();
+  
+  if (!currentSelector) {
+    console.log('[MOBILE] No active selector, only showing single image option');
+    // Only show single image option if no selectors configured
+    showTranslatePrompt(img);
+    return;
+  }
+  
+  if (img.dataset.miProcessing === 'true') {
+    console.log('[MOBILE] Image is being processed, skipping prompt');
+    return;
+  }
+  
+  const existingPrompt = document.querySelector('.translate-options-mobile');
+  if (existingPrompt) {
+    existingPrompt.remove();
+  }
+  
+  const prompt = document.createElement('div');
+  prompt.className = 'translate-options-mobile';
+  prompt.innerHTML = `
+    <div class="translate-option" data-action="single">🌐 Translate This Image</div>
+    <div class="translate-option" data-action="batch">📚 Translate All Images</div>
+  `;
+  prompt.style.cssText = `
+    position: fixed;
+    bottom: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(74, 144, 226, 0.95);
+    color: white;
+    padding: 16px;
+    border-radius: 16px;
+    font-size: 14px;
+    font-weight: 600;
+    z-index: 999999;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    cursor: pointer;
+    animation: slideUpPrompt 0.3s ease;
+    backdrop-filter: blur(10px);
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  `;
+  
+  // Add option styles
+  const style = document.createElement('style');
+  if (!document.getElementById('mobile-options-style')) {
+    style.id = 'mobile-options-style';
+    style.textContent = `
+      .translate-option {
+        padding: 12px 20px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.1);
+        transition: background 0.2s;
+      }
+      .translate-option:active {
+        background: rgba(255, 255, 255, 0.2);
+      }
+    `;
+    document.head.appendChild(style);
+  }
+  
+  // Handle option clicks
+  prompt.querySelectorAll('.translate-option').forEach(option => {
+    option.addEventListener('click', () => {
+      const action = option.dataset.action;
+      
+      if (action === 'single') {
+        selectedImage = img;
+        translateSelectedImage();
+      } else if (action === 'batch') {
+        startBatchTranslation();
+      }
+      
+      prompt.remove();
+    });
+  });
+  
+  document.body.appendChild(prompt);
+  
+  // Auto-dismiss after 5 seconds
+  setTimeout(() => {
+    if (prompt.parentNode) {
+      prompt.remove();
+    }
+  }, 5000);
 }
 
 function findImageAtPoint(x, y) {

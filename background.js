@@ -31,7 +31,7 @@ const DEFAULT_SETTINGS = {
       id: Date.now() + 1
     }
   ],
-  enableBatchMode: true,
+  autoTranslate: false,
   overlayMode: 'colored',
   overlayOpacity: 90,
   overlayTextColor: 'auto',
@@ -39,8 +39,7 @@ const DEFAULT_SETTINGS = {
   draggableOverlay: true,
   enableCache: true,
   skipProcessed: true,
-  observeDynamicImages: true,
-  autoTranslate: true
+  observeDynamicImages: true
 };
 
 let activeTranslations = new Map(); 
@@ -59,29 +58,165 @@ browser.runtime.onInstalled.addListener(async (details) => {
     await browser.storage.local.set({ settings: DEFAULT_SETTINGS });
   }
   
-  // Create context menu
+  await updateContextMenu();
+});
+
+// Update context menu when tab changes
+browser.tabs.onActivated.addListener(async (activeInfo) => {
+  await updateContextMenu();
+});
+
+// Update context menu when tab URL changes
+browser.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  if (changeInfo.url) {
+    await updateContextMenu();
+  }
+});
+
+// Update context menu when settings change
+browser.storage.onChanged.addListener(async (changes, areaName) => {
+  if (areaName === 'local' && changes.settings) {
+    await updateContextMenu();
+  }
+});
+
+
+// Handle context menu clicks
+if (browser.contextMenus) {
+  browser.contextMenus.onClicked.addListener((info, tab) => {
+    if (info.menuItemId === "translate-image") {
+      handleTranslationWithOOMRetry(info.srcUrl, tab.id, null, true);
+    } else if (info.menuItemId === "translate-all-images") {
+      handleBatchTranslation(tab.id);
+    }
+  });
+}
+
+async function updateContextMenu() {
   try {
-    if(browser.contextMenus){
+    // Remove existing context menus first
+    if (browser.contextMenus) {
+      await browser.contextMenus.removeAll();
+    }
+    
+    // Always create single image translation menu
+    if (browser.contextMenus) {
       await browser.contextMenus.create({
         id: "translate-image",
         title: "Translate Image",
         contexts: ["image"]
       });
     }
-  } catch (error) {
-    console.error('Error creating context menu:', error);
-  }
-});
-
-
-// Handle context menu clicks
-if(browser.contextMenus){
-  browser.contextMenus.onClicked.addListener((info, tab) => {
-    if (info.menuItemId === "translate-image") {
-      handleTranslationWithOOMRetry(info.srcUrl, tab.id, null, true);
+    
+    // Check if we should show "Translate All" menu
+    const currentTab = await browser.tabs.query({ active: true, currentWindow: true });
+    if (currentTab && currentTab[0]) {
+      const shouldShowTranslateAll = await shouldShowTranslateAllMenu(currentTab[0].id);
+      
+      if (shouldShowTranslateAll) {
+        if (browser.contextMenus) {
+          await browser.contextMenus.create({
+            id: "translate-all-images",
+            title: "Translate All Images",
+            contexts: ["page", "selection", "image"]
+          });
+        }
+      }
     }
-  });
+  } catch (error) {
+    console.error('Error updating context menu:', error);
+  }
 }
+
+// Function to check if "Translate All" menu should be shown
+async function shouldShowTranslateAllMenu(tabId) {
+  try {
+    // Get current settings
+    const result = await browser.storage.local.get('settings');
+    const settings = result.settings || DEFAULT_SETTINGS;
+
+    // Check if selector rules exist
+    if (!settings.selectorRules || !Array.isArray(settings.selectorRules)) {
+      return false;
+    }
+
+    // Get current tab
+    const tab = await browser.tabs.get(tabId);
+
+    // Check if tab has valid URL (allow both http and https)
+    if (!tab || !tab.url || !/^https?:\/\//.test(tab.url)) {
+      return false;
+    }
+
+    const url = new URL(tab.url);
+    const currentDomain = url.hostname;
+
+    // Find matching selectors for current domain
+    const matchingRules = settings.selectorRules.filter(rule => {
+      if (!rule.enabled) return false;
+
+      // Check if rule matches current domain
+      if (rule.isGeneral) {
+        return true; // General rules apply to all domains
+      }
+
+      return matchesDomain(currentDomain, rule.domains);
+    });
+
+    if (matchingRules.length === 0) {
+      return false; // No selectors configured for this domain
+    }
+
+    // Get selectors from matching rules
+    const selectors = matchingRules.map(rule => rule.selector).filter(s => s);
+    if (selectors.length === 0) {
+      return false;
+    }
+
+    // Use messaging to check if content script is loaded and get active selector
+    try {
+      const response = await browser.tabs.sendMessage(tabId, {
+        action: 'getActiveSelectorAndCheckElements'
+      }).catch(() => {
+        // Ignore errors for tabs that don't have content script loaded
+      });
+      return response && response.hasElements;
+    } catch (error) {
+      // Content script not loaded, this is normal for some pages
+      return false;
+    }
+
+  } catch (error) {
+    console.error('Error checking if Translate All menu should be shown:', error);
+    return false;
+  }
+}
+
+function matchesDomain(currentDomain, ruleDomainsString) {
+  const ruleDomains = ruleDomainsString.split(',').map(d => d.trim()).filter(d => d);
+  
+  for (const ruleDomain of ruleDomains) {
+    const pattern = ruleDomain.replace(/\*/g, '.*').replace(/\./g, '\\.');
+    const regex = new RegExp(`^${pattern}$`, 'i');
+    
+    if (regex.test(currentDomain)) {
+      return true;
+    }
+  }
+  
+  return false;
+}
+
+async function handleBatchTranslation(tabId) {
+  try {
+    browser.tabs.sendMessage(tabId, {
+      action: 'startBatchTranslation'
+    }).catch(() => {});
+  } catch (error) {
+    console.error('Error starting batch translation:', error);
+  }
+}
+
 
 // Handle messages from content scripts and popup
 browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -115,6 +250,11 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'applyCacheOnly') {
     applyCacheIfExists(message.imageUrl, message.imageElement, sender.tab.id);
     sendResponse({ success: true });
+    return true;
+  }
+  
+  if (message.action === 'translateBatch') {
+    handleBatchTranslationWithOOMRetry(message.imageUrls, sender.tab.id);
     return true;
   }
   
@@ -371,6 +511,189 @@ async function handleTranslationWithOOMRetry(imageUrl, tabId, imageElement, isMa
       });
     }
   }
+}
+
+async function handleBatchTranslationWithOOMRetry(imageUrls, tabId, retryCount = 0) {
+  console.log('Batch OOM Handler called for:', imageUrls.length, 'images. Retry count:', retryCount);
+  
+  try {
+    browser.tabs.sendMessage(tabId, {
+      action: 'updateProcessIndicator',
+      text: `Translating ${imageUrls.length} images...`
+    }).catch(() => {});
+    
+    await translateBatchImages(imageUrls, tabId);
+    console.log('Batch translation successful for:', imageUrls.length, 'images');
+    
+    browser.tabs.sendMessage(tabId, {
+      action: 'hideProcessIndicator'
+    }).catch(() => {});
+    
+  } catch (error) {
+    console.error('Batch translation error caught by OOM handler:', error);
+    
+    browser.tabs.sendMessage(tabId, {
+      action: 'hideProcessIndicator'
+    }).catch(() => {});
+    
+    const errorMessage = error.message || error.toString() || '';
+    const isOomError = errorMessage.includes('out of memory') || 
+                        errorMessage.includes('CUDA out of memory') ||
+                        errorMessage.includes('OOM') ||
+                        errorMessage.includes('allocate') ||
+                        errorMessage.includes('memory') ||
+                        errorMessage.includes('Backend error: 500');
+    
+    if (isOomError) {
+      const { settings } = await browser.storage.local.get('settings');
+      const config = settings || DEFAULT_SETTINGS;
+      
+      if (config.autoReduceInpainting && retryCount < 3) {
+        const currentSize = config.inpaintingSize || 2048;
+        const sizeOptions = [2048, 1536, 1024, 768, 512];
+        const currentIndex = sizeOptions.indexOf(currentSize);
+        
+        if (currentIndex < sizeOptions.length - 1) {
+          const newSize = sizeOptions[currentIndex + 1];
+          
+          console.log('Reducing inpainting size to:', newSize);
+          
+          const newSettings = { ...config, inpaintingSize: newSize };
+          await browser.storage.local.set({ settings: newSettings });
+          
+          browser.notifications.create({
+            type: 'basic',
+            iconUrl: 'icons/icon-48.png',
+            title: 'Comic Translator - Memory Optimized',
+            message: `Out of Memory! Reduced inpainting size to ${newSize}px. Retrying batch translation...`
+          });
+          
+          browser.tabs.sendMessage(tabId, {
+            action: 'updateProcessIndicator',
+            text: `Retrying batch with ${newSize}px...`
+          }).catch(() => {});
+          
+          setTimeout(() => {
+            handleBatchTranslationWithOOMRetry(imageUrls, tabId, retryCount + 1);
+          }, 1000);
+          
+          return;
+        }
+      }
+      
+      browser.notifications.create({
+        type: 'basic',
+        iconUrl: 'icons/icon-48.png',
+        title: 'Comic Translator - Out of Memory',
+        message: `GPU memory full! Please reduce inpainting size in settings.\nTry: 1536px, 1024px, or 768px`
+      });
+    } else {
+      browser.notifications.create({
+        type: 'basic',
+        iconUrl: 'icons/icon-48.png',
+        title: 'Comic Translator Error',
+        message: `Batch translation error: ${errorMessage.substring(0, 100)}`
+      });
+    }
+  }
+}
+
+async function translateBatchImages(imageUrls, tabId) {
+  const { settings } = await browser.storage.local.get('settings');
+  const config = settings || DEFAULT_SETTINGS;
+  
+  const batchSize = 4; // Process 4 images at a time
+  const results = [];
+  
+  for (let i = 0; i < imageUrls.length; i += batchSize) {
+    const batch = imageUrls.slice(i, i + batchSize);
+    const processedCount = Math.min(i + batchSize, imageUrls.length);
+    
+    browser.tabs.sendMessage(tabId, {
+      action: 'updateProcessIndicator',
+      text: `Translating ${processedCount}/${imageUrls.length} images...`
+    }).catch(() => {});
+    
+    try {
+      const batchResults = await translateImageBatch(batch, config);
+      results.push(...batchResults);
+      
+      // Apply results to the page
+      batchResults.forEach((result, index) => {
+        const originalUrl = batch[index];
+        if (result.mode === 'overlay') {
+          browser.tabs.sendMessage(tabId, {
+            action: 'overlayText',
+            textRegions: result.textRegions,
+            originalImageUrl: originalUrl,
+            cleanedImageUrl: result.cleanedImageUrl
+          }).catch(() => {});
+        } else if (result.imageUrl) {
+          browser.tabs.sendMessage(tabId, {
+            action: 'replaceImage',
+            imageUrl: result.imageUrl,
+            originalImageUrl: originalUrl
+          }).catch(() => {});
+        }
+      });
+      
+      // Small delay between batches to avoid overwhelming the server
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+    } catch (error) {
+      console.error('Error translating batch:', error);
+      // Continue with next batch even if current batch fails
+    }
+  }
+  
+  browser.notifications.create({
+    type: 'basic',
+    iconUrl: 'icons/icon-48.png',
+    title: 'Comic Translator',
+    message: `Batch translation completed! Processed ${results.length}/${imageUrls.length} images.`
+  });
+}
+
+async function translateImageBatch(imageUrls, config) {
+  const promises = imageUrls.map(async (imageUrl) => {
+    try {
+      const imageBlob = await fetchImage(imageUrl);
+      
+      if (config.displayMode === 'download') {
+        const result = await sendToBackend(imageBlob, config);
+        result.mode = 'download';
+        return { ...result, originalUrl: imageUrl };
+      } else if (config.displayMode === 'replace') {
+        const result = await sendToBackend(imageBlob, config);
+        result.mode = 'replace';
+        return { ...result, originalUrl: imageUrl };
+      } else if (config.displayMode === 'overlay') {
+        try {
+          const jsonResult = await sendToBackendJson(imageBlob, config);
+          
+          if (jsonResult && jsonResult.translations && jsonResult.translations.length > 0) {
+            const textRegions = convertTranslationsToTextRegions(jsonResult.translations, config.targetLang);
+            
+            let cleanedImageUrl = null;
+            if (config.overlayMode === 'cleaned') {
+              const cleanedResult = await sendToBackend(imageBlob, config);
+              cleanedImageUrl = cleanedResult.imageUrl;
+            }
+            
+            return { textRegions, cleanedImageUrl, mode: 'overlay', originalUrl: imageUrl };
+          }
+        } catch (jsonError) {
+          console.error('JSON request failed for batch item:', imageUrl, jsonError);
+          return { mode: 'error', originalUrl: imageUrl, error: jsonError.message };
+        }
+      }
+    } catch (error) {
+      console.error('Error processing image in batch:', imageUrl, error);
+      return { mode: 'error', originalUrl: imageUrl, error: error.message };
+    }
+  });
+  
+  return Promise.all(promises);
 }
 
 async function translateImage(imageUrl, tabId, imageElement, isManual = false) {
