@@ -514,8 +514,8 @@ function convertTranslationsToTextRegions(translations, targetLang) {
       text: translation.text[Object.keys(translation.text)[0]] || '',
       fg_color: `rgb(${fgColor.join(',')})`,
       bg_color: `rgb(${bgColor.join(',')})`,
-      font_size: Math.max(12, Math.min(24, height / 2)),
-      bold: false,
+      font_size: translation.font_size || Math.max(12, Math.min(24, height / 2)),
+      bold: translation.bold || false,
       prob: translation.prob,
       angle: translation.angle
     };

@@ -1113,6 +1113,25 @@ function createTextBox(region, imgRect, imgElement) {
   const width = (region.width / naturalWidth) * imgRect.width;
   const height = (region.height / naturalHeight) * imgRect.height;
   
+  // Calculate scale factor between displayed size and natural size
+  const scaleX = imgRect.width / naturalWidth;
+  const scaleY = imgRect.height / naturalHeight;
+  const scaleFactor = Math.min(scaleX, scaleY);
+  
+  // Use font size from API and scale it based on display size
+  let fontSize = region.font_size || 16;
+  
+  // Apply scale factor to font size
+  fontSize = fontSize * scaleFactor;
+  
+  // Apply font size offset from settings
+  if (settings.fontSizeOffset) {
+    fontSize += settings.fontSizeOffset;
+  }
+  
+  // Apply reasonable min/max bounds
+  fontSize = Math.max(8, Math.min(fontSize, height * 0.8));
+  
   const transform = region.angle && region.angle !== 0 ? `rotate(${region.angle}deg)` : 'none';
   
   let textColor;
@@ -1184,7 +1203,7 @@ function createTextBox(region, imgRect, imgElement) {
     word-wrap: break-word;
     font-family: Arial, sans-serif;
     color: ${textColor};
-    font-size: ${Math.max(12, Math.min(24, height / 2))}px;
+    font-size: ${fontSize}px;
     font-weight: ${region.bold ? 'bold' : 'normal'};
     line-height: 1.2;
     ${backgroundStyle}
