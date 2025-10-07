@@ -139,7 +139,7 @@ function setupFeatures() {
   console.log('Setting up features with settings:', settings);
   
   createProcessIndicator();
-  setupHoverDelegation();
+  //setupHoverDelegation();
   setupMobileLongPress();
   
   if (imageObserver) {
@@ -167,7 +167,7 @@ function setupFeatures() {
     setupPageChangeObserver();
   }
   
-  initializeHoverButtons();
+  //initializeHoverButtons();
 }
 
 function matchesDomain(currentDomain, ruleDomainsString) {
@@ -1272,282 +1272,282 @@ function makeElementDraggable(element) {
   }
 }
 
-function setupHoverDelegation() {
-  if (hoverDelegationSetup) return;
-  hoverDelegationSetup = true;
-  
-  document.body.addEventListener('mouseover', (e) => {
-    if (e.target.tagName === 'IMG') {
-      const img = e.target;
-      
-      if (img.dataset.miProcessed === 'true' && img.dataset.miStatus === 'ok') {
-        return;
-      }
-      
-      if (img.dataset.miProcessing === 'true') {
-        return;
-      }
-      
-      if (autoTranslateEnabled && currentSelector && img.matches(currentSelector)) {
-        return;
-      }
-      
-      if (img.naturalWidth <= 200 || img.naturalHeight <= 100) {
-        return;
-      }
-      
-      const displayWidth = img.offsetWidth || img.width;
-      const displayHeight = img.offsetHeight || img.height;
-      
-      if (displayWidth <= 200 || displayHeight <= 100) {
-        
-        return;
-      }
-      
-      const button = document.querySelector(`.comic-translator-hover-btn[data-img-id="${img.dataset.imgId}"]`);
-      if (!button) {
-        
-        return;
-      }
-      
-      const rect = img.getBoundingClientRect();
-      
-      
-      button.style.display = 'flex';
-      button.style.left = `${rect.right - 40 + window.scrollX}px`;
-      button.style.top = `${rect.top + 8 + window.scrollY}px`;
-      
-      selectedImage = img;
-    }
-  }, { capture: true, passive: true });
-  
-  document.body.addEventListener('mouseout', (e) => {
-    if (e.target.tagName === 'IMG') {
-      const img = e.target;
-      const button = document.querySelector(`.comic-translator-hover-btn[data-img-id="${img.dataset.imgId}"]`);
-      
-      if (button) {
-        setTimeout(() => {
-          button.style.display = 'none';
-        }, 100);
-      }
-    }
-  }, { capture: true, passive: true });
-}
+//function setupHoverDelegation() {
+//  if (hoverDelegationSetup) return;
+//  hoverDelegationSetup = true;
+//  
+//  document.body.addEventListener('mouseover', (e) => {
+//    if (e.target.tagName === 'IMG') {
+//      const img = e.target;
+//      
+//      if (img.dataset.miProcessed === 'true' && img.dataset.miStatus === 'ok') {
+//        return;
+//      }
+//      
+//      if (img.dataset.miProcessing === 'true') {
+//        return;
+//      }
+//      
+//      if (autoTranslateEnabled && currentSelector && img.matches(currentSelector)) {
+//        return;
+//      }
+//      
+//      if (img.naturalWidth <= 200 || img.naturalHeight <= 100) {
+//        return;
+//      }
+//      
+//      const displayWidth = img.offsetWidth || img.width;
+//      const displayHeight = img.offsetHeight || img.height;
+//      
+//      if (displayWidth <= 200 || displayHeight <= 100) {
+//        
+//        return;
+//      }
+//      
+//      const button = document.querySelector(`.comic-translator-hover-btn[data-img-id="${img.dataset.imgId}"]`);
+//      if (!button) {
+//        
+//        return;
+//      }
+//      
+//      const rect = img.getBoundingClientRect();
+//      
+//      
+//      button.style.display = 'flex';
+//      button.style.left = `${rect.right - 40 + window.scrollX}px`;
+//      button.style.top = `${rect.top + 8 + window.scrollY}px`;
+//      
+//      selectedImage = img;
+//    }
+//  }, { capture: true, passive: true });
+//  
+//  document.body.addEventListener('mouseout', (e) => {
+//    if (e.target.tagName === 'IMG') {
+//      const img = e.target;
+//      const button = document.querySelector(`.comic-translator-hover-btn[data-img-id="${img.dataset.imgId}"]`);
+//      
+//      if (button) {
+//        setTimeout(() => {
+//          button.style.display = 'none';
+//        }, 100);
+//      }
+//    }
+//  }, { capture: true, passive: true });
+//}
 
-function initializeHoverButtons() {
-    const images = document.querySelectorAll('img');
-    images.forEach(img => {
-      addHoverButton(img);
-    });
-    
-    // Start observing for new images
-    setupHoverButtonObserver();
-}
+//function initializeHoverButtons() {
+//    const images = document.querySelectorAll('img');
+//    images.forEach(img => {
+//      addHoverButton(img);
+//    });
+//    
+//    // Start observing for new images
+//    setupHoverButtonObserver();
+//}
 
 document.addEventListener('DOMContentLoaded', () => {
   console.log('Comic Translator content script loaded');
   console.log('Current settings:', settings);
 });
 
-function setupHoverButtonObserver() {
-  if (hoverButtonObserver) {
-    hoverButtonObserver.disconnect();
-  }
-  
-  hoverButtonObserver = new MutationObserver((mutations) => {
-    mutations.forEach((mutation) => {
-      if (mutation.addedNodes && mutation.addedNodes.length > 0) {
-        mutation.addedNodes.forEach((node) => {
-          if (node.nodeType === Node.ELEMENT_NODE) {
-            if (node.tagName === 'IMG') {
-              
-              addHoverButton(node);
-            }
-            
-            const images = node.getElementsByTagName('img');
-            if (images && images.length > 0) {
-              Array.from(images).forEach(img => {
-                
-                addHoverButton(img);
-              });
-            }
-          }
-        });
-      }
-      
-      if (mutation.type === 'attributes' && mutation.target.tagName === 'IMG') {
-        const img = mutation.target;
-        
-        if (mutation.attributeName === 'src' || mutation.attributeName === 'data-src') {
-          const oldSrc = mutation.oldValue;
-          const newSrc = img.src || img.dataset.src;
-          
-          if (oldSrc && newSrc && oldSrc !== newSrc) {
-            
-            
-            delete img.dataset.miProcessed;
-            delete img.dataset.miStatus;
-            delete img.dataset.miError;
-            delete img.dataset.hasHoverButton;
-            
-            const oldButtons = getHoverButtons();
-            
-            oldButtons.forEach(btn => {
-              if (btn.dataset.forImage === oldSrc) {
-                
-                btn.remove();
-              }
-            });
-            
-            setTimeout(() => {
-              
-              addHoverButton(img);
-            }, 100);
-            
-            if (autoTranslateEnabled && currentSelector && img.matches(currentSelector)) {
-              setTimeout(() => {
-                if (shouldProcessImage(img)) {
-                  queueImageForTranslation(img);
-                }
-              }, 200);
-            }
-          }
-        }
-        
-        if (mutation.attributeName === 'data-mi-processed' || mutation.attributeName === 'data-mi-status') {
-          addHoverButton(img);
-        }
-      }
-    });
-  });
-  
-  hoverButtonObserver.observe(document.body, {
-    childList: true,
-    subtree: true,
-    attributes: true,
-    attributeFilter: ['src', 'data-src', 'data-mi-processed', 'data-mi-status'],
-    attributeOldValue: true
-  });
-  
-  
-}
+//function setupHoverButtonObserver() {
+//  if (hoverButtonObserver) {
+//    hoverButtonObserver.disconnect();
+//  }
+//  
+//  hoverButtonObserver = new MutationObserver((mutations) => {
+//    mutations.forEach((mutation) => {
+//      if (mutation.addedNodes && mutation.addedNodes.length > 0) {
+//        mutation.addedNodes.forEach((node) => {
+//          if (node.nodeType === Node.ELEMENT_NODE) {
+//            if (node.tagName === 'IMG') {
+//              
+//              addHoverButton(node);
+//            }
+//            
+//            const images = node.getElementsByTagName('img');
+//            if (images && images.length > 0) {
+//              Array.from(images).forEach(img => {
+//                
+//                addHoverButton(img);
+//              });
+//            }
+//          }
+//        });
+//      }
+//      
+//      if (mutation.type === 'attributes' && mutation.target.tagName === 'IMG') {
+//        const img = mutation.target;
+//        
+//        if (mutation.attributeName === 'src' || mutation.attributeName === 'data-src') {
+//          const oldSrc = mutation.oldValue;
+//          const newSrc = img.src || img.dataset.src;
+//          
+//          if (oldSrc && newSrc && oldSrc !== newSrc) {
+//            
+//            
+//            delete img.dataset.miProcessed;
+//            delete img.dataset.miStatus;
+//            delete img.dataset.miError;
+//            delete img.dataset.hasHoverButton;
+//            
+//            const oldButtons = getHoverButtons();
+//            
+//            oldButtons.forEach(btn => {
+//              if (btn.dataset.forImage === oldSrc) {
+//                
+//                btn.remove();
+//              }
+//            });
+//            
+//            setTimeout(() => {
+//              
+//              addHoverButton(img);
+//            }, 100);
+//            
+//            if (autoTranslateEnabled && currentSelector && img.matches(currentSelector)) {
+//              setTimeout(() => {
+//                if (shouldProcessImage(img)) {
+//                  queueImageForTranslation(img);
+//                }
+//              }, 200);
+//            }
+//          }
+//        }
+//        
+//        if (mutation.attributeName === 'data-mi-processed' || mutation.attributeName === 'data-mi-status') {
+//          addHoverButton(img);
+//        }
+//      }
+//    });
+//  });
+//  
+//  hoverButtonObserver.observe(document.body, {
+//    childList: true,
+//    subtree: true,
+//    attributes: true,
+//    attributeFilter: ['src', 'data-src', 'data-mi-processed', 'data-mi-status'],
+//    attributeOldValue: true
+//  });
+//  
+//  
+//}
 
-function addHoverButton(img) {
-  const rect = img.getBoundingClientRect();
-  const isNearViewport = rect.top < window.innerHeight + 500 && rect.bottom > -500;
-  
-  if (!isNearViewport && !img.dataset.hasHoverButton) {
-    return;
-  }
-
-  if (img.dataset.miProcessed === 'true' && img.dataset.miStatus === 'ok') {
-    return;
-  }
-  
-  if (!img.complete || img.naturalWidth === 0) {
-    const handleLoad = () => {
-      img.removeEventListener('load', handleLoad);
-      img.removeEventListener('error', handleError);
-      addHoverButton(img);
-    };
-    
-    const handleError = () => {
-      img.removeEventListener('load', handleLoad);
-      img.removeEventListener('error', handleError);
-    };
-    
-    img.addEventListener('load', handleLoad);
-    img.addEventListener('error', handleError);
-    return;
-  }
-  
-  const existingButton = document.querySelector(`.comic-translator-hover-btn[data-for-image="${CSS.escape(img.src)}"]`);
-  if (existingButton) {
-    return;
-  }
-  
-  if (img.dataset.hasHoverButton === 'true') {
-    const allButtons = getHoverButtons();
-    allButtons.forEach(btn => {
-      if (btn.dataset.imgId === img.dataset.imgId) {
-        btn.remove();
-      }
-    });
-  }
-  
-  if (!img.dataset.imgId) {
-    img.dataset.imgId = 'img_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-  }
-  
-  img.dataset.hasHoverButton = 'true';
-  
-  const hoverButton = document.createElement('div');
-  hoverButton.innerHTML = '🌐';
-  hoverButton.className = 'comic-translator-hover-btn';
-  hoverButton.dataset.forImage = img.src;
-  hoverButton.dataset.imgId = img.dataset.imgId;
-  hoverButton.style.cssText = `
-    position: absolute;
-    background: #4A90E2;
-    color: white;
-    border: none;
-    border-radius: 50%;
-    width: 32px;
-    height: 32px;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    font-size: 16px;
-    z-index: 10000;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
-    transition: transform 0.2s;
-    pointer-events: auto;
-  `;
-  
-  hoverButton.addEventListener('mouseenter', () => {
-    hoverButton.style.transform = 'scale(1.1)';
-  });
-  
-  hoverButton.addEventListener('mouseleave', () => {
-    hoverButton.style.transform = 'scale(1)';
-  });
-  
-  hoverButton.addEventListener('click', (e) => {
-    e.stopPropagation();
-    selectedImage = img;
-    
-    // Use the same path as context menu - go through background script
-    const imageUrl = img.src;
-    if (imageUrl && imageUrl.startsWith('http')) {
-      if (img.dataset.miProcessed === 'true') {
-        console.log('Skipping already processed image');
-        return;
-      }
-      
-      const elementInfo = getElementInfo(img);
-      
-      updateProcessIndicator('Translating...', true, true);
-      
-      // Send message to background script
-      sendMessageWithRetry({
-        action: 'translateImage',
-        imageUrl: imageUrl,
-        imageElement: elementInfo
-      }).catch(error => {
-        console.error('Error sending message to background:', error);
-        updateProcessIndicator('Translation failed', true, false);
-        setTimeout(() => hideProcessIndicator(), 3000);
-      });
-    }
-    
-    hoverButton.style.display = 'none';
-  });
-  
-  document.body.appendChild(hoverButton);
-  invalidateButtonCache();
-}
+//function addHoverButton(img) {
+//  const rect = img.getBoundingClientRect();
+//  const isNearViewport = rect.top < window.innerHeight + 500 && rect.bottom > -500;
+//  
+//  if (!isNearViewport && !img.dataset.hasHoverButton) {
+//    return;
+//  }
+//
+//  if (img.dataset.miProcessed === 'true' && img.dataset.miStatus === 'ok') {
+//    return;
+//  }
+//  
+//  if (!img.complete || img.naturalWidth === 0) {
+//    const handleLoad = () => {
+//      img.removeEventListener('load', handleLoad);
+//      img.removeEventListener('error', handleError);
+//      //addHoverButton(img);
+//    };
+//    
+//    const handleError = () => {
+//      img.removeEventListener('load', handleLoad);
+//      img.removeEventListener('error', handleError);
+//    };
+//    
+//    img.addEventListener('load', handleLoad);
+//    img.addEventListener('error', handleError);
+//    return;
+//  }
+//  
+//  const existingButton = document.querySelector(`.comic-translator-hover-btn[data-for-image="${CSS.escape(img.src)}"]`);
+//  if (existingButton) {
+//    return;
+//  }
+//  
+//  if (img.dataset.hasHoverButton === 'true') {
+//    const allButtons = getHoverButtons();
+//    allButtons.forEach(btn => {
+//      if (btn.dataset.imgId === img.dataset.imgId) {
+//        btn.remove();
+//      }
+//    });
+//  }
+//  
+//  if (!img.dataset.imgId) {
+//    img.dataset.imgId = 'img_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+//  }
+//  
+//  img.dataset.hasHoverButton = 'true';
+//  
+//  const hoverButton = document.createElement('div');
+//  hoverButton.innerHTML = '🌐';
+//  hoverButton.className = 'comic-translator-hover-btn';
+//  hoverButton.dataset.forImage = img.src;
+//  hoverButton.dataset.imgId = img.dataset.imgId;
+//  hoverButton.style.cssText = `
+//    position: absolute;
+//    background: #4A90E2;
+//    color: white;
+//    border: none;
+//    border-radius: 50%;
+//    width: 32px;
+//    height: 32px;
+//    display: none;
+//    align-items: center;
+//    justify-content: center;
+//    cursor: pointer;
+//    font-size: 16px;
+//    z-index: 10000;
+//    box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+//    transition: transform 0.2s;
+//    pointer-events: auto;
+//  `;
+//  
+//  hoverButton.addEventListener('mouseenter', () => {
+//    hoverButton.style.transform = 'scale(1.1)';
+//  });
+//  
+//  hoverButton.addEventListener('mouseleave', () => {
+//    hoverButton.style.transform = 'scale(1)';
+//  });
+//  
+//  hoverButton.addEventListener('click', (e) => {
+//    e.stopPropagation();
+//    selectedImage = img;
+//    
+//    // Use the same path as context menu - go through background script
+//    const imageUrl = img.src;
+//    if (imageUrl && imageUrl.startsWith('http')) {
+//      if (img.dataset.miProcessed === 'true') {
+//        console.log('Skipping already processed image');
+//        return;
+//      }
+//      
+//      const elementInfo = getElementInfo(img);
+//      
+//      updateProcessIndicator('Translating...', true, true);
+//      
+//      // Send message to background script
+//      sendMessageWithRetry({
+//        action: 'translateImage',
+//        imageUrl: imageUrl,
+//        imageElement: elementInfo
+//      }).catch(error => {
+//        console.error('Error sending message to background:', error);
+//        updateProcessIndicator('Translation failed', true, false);
+//        setTimeout(() => hideProcessIndicator(), 3000);
+//      });
+//    }
+//    
+//    hoverButton.style.display = 'none';
+//  });
+//  
+//  document.body.appendChild(hoverButton);
+//  invalidateButtonCache();
+//}
 
 function setupMobileLongPress() {
   console.log('[MOBILE] Setting up long-press detection');
@@ -1633,6 +1633,12 @@ function findImageAtPoint(x, y) {
 }
 
 function showTranslatePrompt(img) {
+  // Check if image is already being processed
+  if (img.dataset.miProcessing === 'true') {
+    console.log('[MOBILE] Image is being processed, skipping prompt');
+    return;
+  }
+  
   const existingPrompt = document.querySelector('.translate-prompt-mobile');
   if (existingPrompt) {
     existingPrompt.remove();
@@ -1680,7 +1686,7 @@ function showTranslatePrompt(img) {
     dismissTimer = setTimeout(() => {
       prompt.remove();
       cleanupListeners();
-    }, 150); // Small delay to distinguish tap from scroll
+    }, 150);
   };
   
   const cancelDismiss = () => {
@@ -1695,7 +1701,6 @@ function showTranslatePrompt(img) {
     document.removeEventListener('touchmove', cancelDismiss);
   };
   
-  // Add listeners for dismiss on outside touch, but cancel if scrolling
   document.addEventListener('touchstart', dismissPrompt, { passive: true });
   document.addEventListener('touchmove', cancelDismiss, { passive: true });
   
