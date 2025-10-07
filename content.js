@@ -103,7 +103,7 @@ async function loadSettingsWithRetry(retries = 5, delay = 200) {
   console.warn('Failed to load settings after retries, using defaults');
   settings = {
     backendUrl: 'http://127.0.0.1:8000',
-    translator: 'sugoi',
+    translator: 'offline',
     targetLang: 'ENG',
     detector: 'default',
     inpainter: 'lama_large',
@@ -160,9 +160,7 @@ function setupFeatures() {
   
   if (settings.enableBatchMode && currentSelector) {
     startAutoTranslation();
-  } else {
-    startAutoTranslation();
-  }
+  } 
   
   if (settings.observeDynamicImages) {
     setupEnhancedImageObserver();
@@ -1391,7 +1389,6 @@ function setupHoverButtonObserver() {
             if (autoTranslateEnabled && currentSelector && img.matches(currentSelector)) {
               setTimeout(() => {
                 if (shouldProcessImage(img)) {
-                  
                   queueImageForTranslation(img);
                 }
               }, 200);
@@ -1657,10 +1654,37 @@ function showTranslatePrompt(img) {
     document.head.appendChild(style);
   }
   
+  let dismissTimer = null;
+  
+  const dismissPrompt = (e) => {
+    if (prompt.contains(e.target)) return;
+    dismissTimer = setTimeout(() => {
+      prompt.remove();
+      cleanupListeners();
+    }, 150); // Small delay to distinguish tap from scroll
+  };
+  
+  const cancelDismiss = () => {
+    if (dismissTimer) {
+      clearTimeout(dismissTimer);
+      dismissTimer = null;
+    }
+  };
+  
+  const cleanupListeners = () => {
+    document.removeEventListener('touchstart', dismissPrompt);
+    document.removeEventListener('touchmove', cancelDismiss);
+  };
+  
+  // Add listeners for dismiss on outside touch, but cancel if scrolling
+  document.addEventListener('touchstart', dismissPrompt, { passive: true });
+  document.addEventListener('touchmove', cancelDismiss, { passive: true });
+  
   prompt.addEventListener('click', () => {
     selectedImage = img;
     translateSelectedImage();
     prompt.remove();
+    cleanupListeners();
   });
   
   document.body.appendChild(prompt);
@@ -1668,7 +1692,12 @@ function showTranslatePrompt(img) {
   setTimeout(() => {
     if (prompt.parentNode) {
       prompt.style.animation = 'slideUpPrompt 0.3s ease reverse';
-      setTimeout(() => prompt.remove(), 300);
+      setTimeout(() => {
+        if (prompt.parentNode) {
+          prompt.remove();
+          cleanupListeners();
+        }
+      }, 300);
     }
-  }, 3000);
+  }, 5000);
 }

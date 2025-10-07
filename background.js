@@ -61,22 +61,27 @@ browser.runtime.onInstalled.addListener(async (details) => {
   
   // Create context menu
   try {
-    await browser.contextMenus.create({
-      id: "translate-manga-image",
-      title: "Translate Manga Image",
-      contexts: ["image"]
-    });
+    if(browser.contextMenus){
+      await browser.contextMenus.create({
+        id: "translate-image",
+        title: "Translate Image",
+        contexts: ["image"]
+      });
+    }
   } catch (error) {
     console.error('Error creating context menu:', error);
   }
 });
 
+
 // Handle context menu clicks
-browser.contextMenus.onClicked.addListener((info, tab) => {
-  if (info.menuItemId === "translate-manga-image") {
-    handleTranslationWithOOMRetry(info.srcUrl, tab.id, null, true);
-  }
-});
+if(browser.contextMenus){
+  browser.contextMenus.onClicked.addListener((info, tab) => {
+    if (info.menuItemId === "translate-image") {
+      handleTranslationWithOOMRetry(info.srcUrl, tab.id, null, true);
+    }
+  });
+}
 
 // Handle messages from content scripts and popup
 browser.runtime.onMessage.addListener((message, sender, sendResponse) => {

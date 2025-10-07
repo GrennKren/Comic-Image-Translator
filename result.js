@@ -16,7 +16,7 @@ function displayImage(imageUrl) {
   
   container.innerHTML = `
     <div class="image-container">
-      <img src="${imageUrl}" alt="Translated manga image" id="resultImage">
+      <img src="${imageUrl}" alt="Translated comic image" id="resultImage">
       <div class="actions">
         <button class="btn-download" id="downloadBtn">
           <span>💾</span> Download Image

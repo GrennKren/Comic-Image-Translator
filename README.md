@@ -68,7 +68,7 @@ A Firefox extension that automatically translates manga/comic images using the m
 
 ### Manual Translation
 
-1. Right-click on any manga image and select "Translate Manga Image"
+1. Right-click on any comic image and select "Translate Image"
 2. Or hover over an image and click the translate button (🌐) that appears
 3. Or hover over an image and press Alt+T
 

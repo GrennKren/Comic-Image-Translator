@@ -1,6 +1,6 @@
 const DEFAULT_SETTINGS = {
   backendUrl: 'http://127.0.0.1:8000',
-  translator: 'sugoi',
+  translator: 'offline',
   targetLang: 'ENG',
   detector: 'default',
   inpainter: 'lama_large',
@@ -125,9 +125,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     // Clear cache button handler
-    const clearCache = document.getElementById('clearCache');
-    if (clearCache) {
-      clearCache.addEventListener('click', clearCache);
+    const clearCacheBtn = document.getElementById('clearCache');
+    if (clearCacheBtn) {
+      clearCacheBtn.addEventListener('click', clearCache);
     } else {
       console.warn('clearCache not found');
     }
@@ -367,7 +367,7 @@ async function updateCacheInfo() {
 function showStatus(message, type) {
   const statusEl = document.getElementById('status');
   statusEl.textContent = message;
-  statusEl.className = `status ${type}`;
+  statusEl.className = `status-popup ${type}`;
   statusEl.style.display = 'block';
   
   // Hide after 3 seconds
