@@ -505,7 +505,7 @@ async function handleTranslationWithOOMRetry(imageUrl, tabId, imageElement, isMa
       console.log('Connection error detected, canceling translation');
       browser.tabs.sendMessage(tabId, {
         action: 'updateProcessIndicator',
-        text: 'Backend connection failed. Check backend URL in settings.',
+        text: 'Backend connection failed. Check Backend URL or console for details.',
         autoHide: true,
         duration: 5000
       }).catch(() => {});
@@ -601,7 +601,6 @@ async function handleBatchTranslationWithOOMRetry(imageUrls, tabId, retryCount =
     }).catch(() => {});
     
   } catch (error) {
-    console.error('Batch translation error caught by OOM handler:', error);
     
     const errorMessage = error.message || error.toString() || '';
     
@@ -609,7 +608,7 @@ async function handleBatchTranslationWithOOMRetry(imageUrls, tabId, retryCount =
       console.log('Connection error detected in batch translation, canceling');
       browser.tabs.sendMessage(tabId, {
         action: 'updateProcessIndicator',
-        text: 'Backend connection failed. Check backend URL in settings.',
+        text: 'Backend connection failed. Check Backend URL or console for details.',
         autoHide: true,
         duration: 5000
       }).catch(() => {});
@@ -617,6 +616,8 @@ async function handleBatchTranslationWithOOMRetry(imageUrls, tabId, retryCount =
     }
     
     if (isOOMError(errorMessage)) {
+      console.error('Batch translation error caught by OOM handler:', errorMessage);
+      
       const { settings } = await browser.storage.local.get('settings');
       const config = settings || DEFAULT_SETTINGS;
       

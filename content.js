@@ -661,7 +661,7 @@ async function processTranslationQueue() {
       
       if (isConnError) {
         console.log('Connection error in auto-translation queue, stopping');
-        updateProcessIndicator('Backend connection failed. Check backend URL in settings.', true, false);
+        updateProcessIndicator('Backend connection failed. Check Backend URL or console for details.', true, false);
         setTimeout(() => hideProcessIndicator(), 5000);
         translationQueue.clear();
         break;
@@ -703,7 +703,7 @@ function createProcessIndicator() {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     transition: opacity 0.3s ease;
-    max-width: 300px;
+    max-width: calc(100vw - 40px);
     backdrop-filter: blur(10px);
   `;
   
@@ -731,13 +731,11 @@ function createProcessIndicator() {
   text.id = 'comic-translator-indicator-text';
   text.textContent = 'Processing...';
   text.style.cssText = `
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    word-break: break-word;
   `;
   
   const closeBtn = document.createElement('span');
-  closeBtn.innerHTML = '×';
+  closeBtn.innerHTML = '&#x2715;';
   closeBtn.style.cssText = `
     margin-left: 8px;
     cursor: pointer;
@@ -826,7 +824,7 @@ async function translateSingleImage(img) {
       updateProcessIndicator('Translation failed', true, false);
       setTimeout(() => hideProcessIndicator(), 3000);
       markImageAsProcessed(img, 'error', error.message);
-      console.warn('Translation failed for image:', img.src, 'Error:', error.message);
+      console.error('Translation failed for image:', img.src, 'Error:', error);
       resolve(null);
     });
   });
