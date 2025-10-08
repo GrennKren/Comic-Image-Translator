@@ -45,6 +45,8 @@ const DEFAULT_SETTINGS = {
 let activeTranslations = new Map(); 
 let translationQueue = []; 
 let isProcessingQueue = false;
+let isBatchTranslating = false;
+let activeSingleTranslations = new Set();
 
 // Service worker lifecycle: Log startup
 self.addEventListener('activate', (event) => {
@@ -85,11 +87,67 @@ browser.storage.onChanged.addListener(async (changes, areaName) => {
 if (browser.contextMenus) {
   browser.contextMenus.onClicked.addListener((info, tab) => {
     if (info.menuItemId === "translate-image") {
-      handleTranslationWithOOMRetry(info.srcUrl, tab.id, null, true);
+      const imageUrl = info.srcUrl;
+      
+      if (activeSingleTranslations.has(imageUrl)) {
+        browser.tabs.sendMessage(tab.id, {
+          action: 'updateProcessIndicator',
+          text: 'Translation already in progress for this image',
+          autoHide: true,
+          duration: 2000
+        }).catch(() => {});
+        return;
+      }
+      
+      if (isBatchTranslating) {
+        browser.tabs.sendMessage(tab.id, {
+          action: 'updateProcessIndicator',
+          text: 'Batch translation in progress. Please wait.',
+          autoHide: true,
+          duration: 2000
+        }).catch(() => {});
+        return;
+      }
+      
+      activeSingleTranslations.add(imageUrl);
+      handleTranslationWithOOMRetry(info.srcUrl, tab.id, null, true)
+        .finally(() => {
+          activeSingleTranslations.delete(imageUrl);
+        });
     } else if (info.menuItemId === "translate-all-images") {
+      if (isBatchTranslating) {
+        browser.tabs.sendMessage(tab.id, {
+          action: 'updateProcessIndicator',
+          text: 'Batch translation already in progress',
+          autoHide: true,
+          duration: 2000
+        }).catch(() => {});
+        return;
+      }
+      
       handleBatchTranslation(tab.id);
     }
   });
+}
+
+// Helper function to check connection errors
+function isConnectionError(errorMessage) {
+  return errorMessage.includes('NS_ERROR_CONNECTION_REFUSED') ||
+         errorMessage.includes('Failed to fetch') ||
+         errorMessage.includes('NetworkError') ||
+         errorMessage.includes('ERR_CONNECTION_REFUSED') ||
+         errorMessage.includes('net::ERR_') ||
+         errorMessage.includes('404');
+}
+
+// Helper function to check OOM errors
+function isOOMError(errorMessage) {
+  return errorMessage.includes('out of memory') || 
+         errorMessage.includes('CUDA out of memory') ||
+         errorMessage.includes('OOM') ||
+         errorMessage.includes('allocate') ||
+         errorMessage.includes('memory') ||
+         errorMessage.includes('Backend error: 500');
 }
 
 async function updateContextMenu() {
@@ -208,12 +266,19 @@ function matchesDomain(currentDomain, ruleDomainsString) {
 }
 
 async function handleBatchTranslation(tabId) {
+  if (isBatchTranslating) {
+    return;
+  }
+  
+  isBatchTranslating = true;
+  
   try {
-    browser.tabs.sendMessage(tabId, {
+    await browser.tabs.sendMessage(tabId, {
       action: 'startBatchTranslation'
-    }).catch(() => {});
+    });
   } catch (error) {
     console.error('Error starting batch translation:', error);
+    isBatchTranslating = false;
   }
 }
 
@@ -424,29 +489,32 @@ async function handleTranslationWithOOMRetry(imageUrl, tabId, imageElement, isMa
     console.log('Translation successful for:', imageUrl);
     
     browser.tabs.sendMessage(tabId, {
-      action: 'hideProcessIndicator'
+      action: 'updateProcessIndicator',
+      text: 'Translation completed',
+      autoHide: true,
+      duration: 2000
     }).catch(() => {});
     
   } catch (error) {
     console.error('Translation error caught by OOM handler:', error);
     
-    browser.tabs.sendMessage(tabId, {
-      action: 'hideProcessIndicator'
-    }).catch(() => {});
-    
     const errorMessage = error.message || error.toString() || '';
     console.log('Error message:', errorMessage);
     
-    const isOomError = errorMessage.includes('out of memory') || 
-                        errorMessage.includes('CUDA out of memory') ||
-                        errorMessage.includes('OOM') ||
-                        errorMessage.includes('allocate') ||
-                        errorMessage.includes('memory') ||
-                        errorMessage.includes('Backend error: 500');
+    if (isConnectionError(errorMessage)) {
+      console.log('Connection error detected, canceling translation');
+      browser.tabs.sendMessage(tabId, {
+        action: 'updateProcessIndicator',
+        text: 'Backend connection failed. Check backend URL in settings.',
+        autoHide: true,
+        duration: 5000
+      }).catch(() => {});
+      throw error;
+    }
     
-    console.log('Is OOM error:', isOomError);
+    console.log('Is OOM error:', isOOMError(errorMessage));
     
-    if (isOomError) {
+    if (isOOMError(errorMessage)) {
       const { settings } = await browser.storage.local.get('settings');
       const config = settings || DEFAULT_SETTINGS;
       
@@ -467,12 +535,11 @@ async function handleTranslationWithOOMRetry(imageUrl, tabId, imageElement, isMa
           const newSettings = { ...config, inpaintingSize: newSize };
           await browser.storage.local.set({ settings: newSettings });
           
-          browser.notifications.create({
-            type: 'basic',
-            iconUrl: 'icons/icon-48.png',
-            title: 'Comic Translator - Memory Optimized',
-            message: `Out of Memory! Reduced inpainting size to ${newSize}px. Retrying...`
-          });
+          browser.tabs.sendMessage(tabId, {
+            action: 'updateProcessIndicator',
+            text: `Out of Memory! Reduced to ${newSize}px. Retrying...`,
+            autoHide: false
+          }).catch(() => {});
           
           const cacheKey = generateCacheKey(imageUrl, config);
           const resultStorage = await browser.storage.local.get('translationCache');
@@ -481,11 +548,6 @@ async function handleTranslationWithOOMRetry(imageUrl, tabId, imageElement, isMa
             delete cache[cacheKey];
             await browser.storage.local.set({ translationCache: cache });
           }
-          
-          browser.tabs.sendMessage(tabId, {
-            action: 'updateProcessIndicator',
-            text: `Retrying with ${newSize}px...`
-          }).catch(() => {});
           
           setTimeout(() => {
             console.log('Retrying translation with new settings...');
@@ -500,21 +562,21 @@ async function handleTranslationWithOOMRetry(imageUrl, tabId, imageElement, isMa
         console.log('Auto reduce disabled or max retries reached');
       }
       
-      browser.notifications.create({
-        type: 'basic',
-        iconUrl: 'icons/icon-48.png',
-        title: 'Comic Translator - Out of Memory',
-        message: `GPU memory full! Please reduce inpainting size in settings.\nTry: 1536px, 1024px, or 768px`
-      });
+      browser.tabs.sendMessage(tabId, {
+        action: 'updateProcessIndicator',
+        text: 'GPU memory full! Reduce inpainting size in settings. Try: 1536px, 1024px, or 768px',
+        autoHide: true,
+        duration: 5000
+      }).catch(() => {});
     } else {
       console.log('Not an OOM error, showing generic error');
       
-      browser.notifications.create({
-        type: 'basic',
-        iconUrl: 'icons/icon-48.png',
-        title: 'Comic Translator Error',
-        message: `Error: ${errorMessage.substring(0, 100)}`
-      });
+      browser.tabs.sendMessage(tabId, {
+        action: 'updateProcessIndicator',
+        text: `Error: ${errorMessage.substring(0, 100)}`,
+        autoHide: true,
+        duration: 5000
+      }).catch(() => {});
     }
   }
 }
@@ -532,25 +594,29 @@ async function handleBatchTranslationWithOOMRetry(imageUrls, tabId, retryCount =
     console.log('Batch translation successful for:', imageUrls.length, 'images');
     
     browser.tabs.sendMessage(tabId, {
-      action: 'hideProcessIndicator'
+      action: 'updateProcessIndicator',
+      text: `Batch completed! Processed ${imageUrls.length} images.`,
+      autoHide: true,
+      duration: 3000
     }).catch(() => {});
     
   } catch (error) {
     console.error('Batch translation error caught by OOM handler:', error);
     
-    browser.tabs.sendMessage(tabId, {
-      action: 'hideProcessIndicator'
-    }).catch(() => {});
-    
     const errorMessage = error.message || error.toString() || '';
-    const isOomError = errorMessage.includes('out of memory') || 
-                        errorMessage.includes('CUDA out of memory') ||
-                        errorMessage.includes('OOM') ||
-                        errorMessage.includes('allocate') ||
-                        errorMessage.includes('memory') ||
-                        errorMessage.includes('Backend error: 500');
     
-    if (isOomError) {
+    if (isConnectionError(errorMessage)) {
+      console.log('Connection error detected in batch translation, canceling');
+      browser.tabs.sendMessage(tabId, {
+        action: 'updateProcessIndicator',
+        text: 'Backend connection failed. Check backend URL in settings.',
+        autoHide: true,
+        duration: 5000
+      }).catch(() => {});
+      throw error;
+    }
+    
+    if (isOOMError(errorMessage)) {
       const { settings } = await browser.storage.local.get('settings');
       const config = settings || DEFAULT_SETTINGS;
       
@@ -567,16 +633,10 @@ async function handleBatchTranslationWithOOMRetry(imageUrls, tabId, retryCount =
           const newSettings = { ...config, inpaintingSize: newSize };
           await browser.storage.local.set({ settings: newSettings });
           
-          browser.notifications.create({
-            type: 'basic',
-            iconUrl: 'icons/icon-48.png',
-            title: 'Comic Translator - Memory Optimized',
-            message: `Out of Memory! Reduced inpainting size to ${newSize}px. Retrying batch translation...`
-          });
-          
           browser.tabs.sendMessage(tabId, {
             action: 'updateProcessIndicator',
-            text: `Retrying batch with ${newSize}px...`
+            text: `Out of Memory! Reduced to ${newSize}px. Retrying batch...`,
+            autoHide: false
           }).catch(() => {});
           
           setTimeout(() => {
@@ -587,20 +647,22 @@ async function handleBatchTranslationWithOOMRetry(imageUrls, tabId, retryCount =
         }
       }
       
-      browser.notifications.create({
-        type: 'basic',
-        iconUrl: 'icons/icon-48.png',
-        title: 'Comic Translator - Out of Memory',
-        message: `GPU memory full! Please reduce inpainting size in settings.\nTry: 1536px, 1024px, or 768px`
-      });
+      browser.tabs.sendMessage(tabId, {
+        action: 'updateProcessIndicator',
+        text: 'GPU memory full! Reduce inpainting size in settings. Try: 1536px, 1024px, or 768px',
+        autoHide: true,
+        duration: 5000
+      }).catch(() => {});
     } else {
-      browser.notifications.create({
-        type: 'basic',
-        iconUrl: 'icons/icon-48.png',
-        title: 'Comic Translator Error',
-        message: `Batch translation error: ${errorMessage.substring(0, 100)}`
-      });
+      browser.tabs.sendMessage(tabId, {
+        action: 'updateProcessIndicator',
+        text: `Batch error: ${errorMessage.substring(0, 80)}`,
+        autoHide: true,
+        duration: 5000
+      }).catch(() => {});
     }
+  } finally {
+    isBatchTranslating = false;
   }
 }
 
@@ -608,19 +670,19 @@ async function translateBatchImages(imageUrls, tabId) {
   const { settings } = await browser.storage.local.get('settings');
   const config = settings || DEFAULT_SETTINGS;
   
-  const batchSize = 4; // Process 4 images at a time
+  const batchSize = 4;
   const results = [];
   
-  for (let i = 0; i < imageUrls.length; i += batchSize) {
-    const batch = imageUrls.slice(i, i + batchSize);
-    const processedCount = Math.min(i + batchSize, imageUrls.length);
-    
-    browser.tabs.sendMessage(tabId, {
-      action: 'updateProcessIndicator',
-      text: `Translating ${processedCount}/${imageUrls.length} images...`
-    }).catch(() => {});
-    
-    try {
+  try {
+    for (let i = 0; i < imageUrls.length; i += batchSize) {
+      const batch = imageUrls.slice(i, i + batchSize);
+      const processedCount = Math.min(i + batchSize, imageUrls.length);
+      
+      browser.tabs.sendMessage(tabId, {
+        action: 'updateProcessIndicator',
+        text: `Translating ${processedCount}/${imageUrls.length} images...`
+      }).catch(() => {});
+      
       const batchResults = await translateImageBatch(batch, config);
       results.push(...batchResults);
       
@@ -643,21 +705,20 @@ async function translateBatchImages(imageUrls, tabId) {
         }
       });
       
-      // Small delay between batches to avoid overwhelming the server
       await new Promise(resolve => setTimeout(resolve, 500));
-      
-    } catch (error) {
-      console.error('Error translating batch:', error);
-      // Continue with next batch even if current batch fails
     }
+    
+    browser.tabs.sendMessage(tabId, {
+      action: 'updateProcessIndicator',
+      text: `Batch completed! Processed ${results.length}/${imageUrls.length} images.`,
+      autoHide: true,
+      duration: 3000
+    }).catch(() => {});
+    
+  } catch (error) {
+    console.error('Error in translateBatchImages:', error);
+    throw error;
   }
-  
-  browser.notifications.create({
-    type: 'basic',
-    iconUrl: 'icons/icon-48.png',
-    title: 'Comic Translator',
-    message: `Batch translation completed! Processed ${results.length}/${imageUrls.length} images.`
-  });
 }
 
 async function translateImageBatch(imageUrls, config) {
@@ -693,33 +754,35 @@ async function translateImageBatch(imageUrls, config) {
         
         return { ...result, originalUrl: imageUrl };
       } else if (config.displayMode === 'overlay') {
-        try {
-          const jsonResult = await sendToBackendJson(imageBlob, config);
+        const jsonResult = await sendToBackendJson(imageBlob, config);
+        
+        if (jsonResult && jsonResult.translations && jsonResult.translations.length > 0) {
+          const textRegions = convertTranslationsToTextRegions(jsonResult.translations, config.targetLang);
           
-          if (jsonResult && jsonResult.translations && jsonResult.translations.length > 0) {
-            const textRegions = convertTranslationsToTextRegions(jsonResult.translations, config.targetLang);
-            
-            let cleanedImageUrl = null;
-            if (config.overlayMode === 'cleaned') {
-              const cleanedResult = await sendToBackend(imageBlob, config);
-              cleanedImageUrl = cleanedResult.imageUrl;
-            }
-            
-            const result = { textRegions, cleanedImageUrl, mode: 'overlay' };
-            
-            if (config.enableCache) {
-              await cacheTranslation(cacheKey, result);
-            }
-            
-            return { textRegions, cleanedImageUrl, mode: 'overlay', originalUrl: imageUrl };
+          let cleanedImageUrl = null;
+          if (config.overlayMode === 'cleaned') {
+            const cleanedResult = await sendToBackend(imageBlob, config);
+            cleanedImageUrl = cleanedResult.imageUrl;
           }
-        } catch (jsonError) {
-          console.error('JSON request failed for batch item:', imageUrl, jsonError);
-          return { mode: 'error', originalUrl: imageUrl, error: jsonError.message };
+          
+          const result = { textRegions, cleanedImageUrl, mode: 'overlay' };
+          
+          if (config.enableCache) {
+            await cacheTranslation(cacheKey, result);
+          }
+          
+          return { textRegions, cleanedImageUrl, mode: 'overlay', originalUrl: imageUrl };
         }
       }
+      
+      return { mode: 'no_text', originalUrl: imageUrl };
     } catch (error) {
       console.error('Error processing image in batch:', imageUrl, error);
+      // Rethrow connection errors to stop batch
+      const errorMessage = error.message || error.toString() || '';
+      if (isConnectionError(errorMessage)) {
+        throw error;
+      }
       return { mode: 'error', originalUrl: imageUrl, error: error.message };
     }
   });
@@ -731,12 +794,12 @@ async function translateImage(imageUrl, tabId, imageElement, isManual = false) {
   if (activeTranslations.has(imageUrl)) {
     console.log('Image already being processed:', imageUrl);
     if (isManual) {
-      browser.notifications.create({
-        type: 'basic',
-        iconUrl: 'icons/icon-48.png',
-        title: 'Comic Translator',
-        message: 'Translation in progress, please wait...'
-      });
+      browser.tabs.sendMessage(tabId, {
+        action: 'updateProcessIndicator',
+        text: 'Translation in progress, please wait...',
+        autoHide: true,
+        duration: 2000
+      }).catch(() => {});
     }
     return;
   }
@@ -760,12 +823,10 @@ async function translateImage(imageUrl, tabId, imageElement, isManual = false) {
     }
     
     if (isManual) {
-      browser.notifications.create({
-        type: 'basic',
-        iconUrl: 'icons/icon-48.png',
-        title: 'Comic Translator',
-        message: 'Processing image...'
-      });
+      browser.tabs.sendMessage(tabId, {
+        action: 'updateProcessIndicator',
+        text: 'Processing image...'
+      }).catch(() => {});
     }
     
     const imageBlob = await fetchImage(imageUrl);
@@ -818,12 +879,12 @@ async function translateImage(imageUrl, tabId, imageElement, isManual = false) {
     }
     
     if (isManual && result.mode !== 'no_text' && result.mode !== 'error') {
-      browser.notifications.create({
-        type: 'basic',
-        iconUrl: 'icons/icon-48.png',
-        title: 'Comic Translator',
-        message: 'Translation completed!'
-      });
+      browser.tabs.sendMessage(tabId, {
+        action: 'updateProcessIndicator',
+        text: 'Translation completed!',
+        autoHide: true,
+        duration: 2000
+      }).catch(() => {});
     }
     
   } catch (error) {

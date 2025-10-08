@@ -38,6 +38,9 @@ let touchStartPos = { x: 0, y: 0 };
 // CLEANUP & DEBOUNCE
 let cleanupTimeout = null;
 
+// PROCESSING STATE
+let isBatchTranslating = false;
+
 async function sendMessageWithRetry(message, maxRetries = 3, delay = 500) {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -520,17 +523,20 @@ function translateImagesWithSelector(selector) {
 }
 
 async function startBatchTranslation() {
-  // Get current selector from settings
+  if (isBatchTranslating) {
+    updateProcessIndicator('Batch translation already in progress', true, false);
+    setTimeout(() => hideProcessIndicator(), 2000);
+    return;
+  }
+  
   currentSelector = getActiveSelectors();
   
   if (!currentSelector) {
-        updateProcessIndicator('No selector configured for this site', true, false);
+    updateProcessIndicator('No selector configured for this site', true, false);
     setTimeout(() => hideProcessIndicator(), 3000);
     return;
   }
   
-    
-  // Get all images matching the selector
   const images = Array.from(document.querySelectorAll(currentSelector));
   
   if (images.length === 0) {
@@ -539,7 +545,6 @@ async function startBatchTranslation() {
     return;
   }
   
-  // Filter images that need translation
   const imagesToTranslate = images.filter(img => shouldProcessImage(img));
   
   if (imagesToTranslate.length === 0) {
@@ -548,27 +553,25 @@ async function startBatchTranslation() {
     return;
   }
   
-    
-  // Show initial progress
+  isBatchTranslating = true;
+  
   updateProcessIndicator(`Preparing to translate ${imagesToTranslate.length} images...`, true, true);
   
-  // Extract image URLs
   const imageUrls = imagesToTranslate.map(img => img.src || img.dataset.src).filter(url => url);
   
   if (imageUrls.length === 0) {
     updateProcessIndicator('No valid image URLs found', true, false);
     setTimeout(() => hideProcessIndicator(), 3000);
+    isBatchTranslating = false;
     return;
   }
   
-  // Send batch translation request to background script
   try {
     await sendMessageWithRetry({
       action: 'translateBatch',
       imageUrls: imageUrls
     });
     
-    // Mark images as being processed
     imagesToTranslate.forEach(img => {
       img.dataset.miProcessing = 'true';
       img.style.outline = '2px solid #4A90E2';
@@ -578,6 +581,8 @@ async function startBatchTranslation() {
     console.error('Error starting batch translation:', error);
     updateProcessIndicator('Error starting batch translation', true, false);
     setTimeout(() => hideProcessIndicator(), 3000);
+  } finally {
+    isBatchTranslating = false;
   }
 }
 
@@ -641,17 +646,34 @@ async function processTranslationQueue() {
       await translateSingleImage(img);
       translationQueue.delete(img);
       
-      // Small delay to prevent overwhelming the browser
       await new Promise(resolve => setTimeout(resolve, 200));
       
     } catch (error) {
       console.error('Error translating image:', error);
-      markImageAsProcessed(img, 'error', error.message);
-      translationQueue.delete(img);
+      const errorMessage = error.message || error.toString() || '';
+      
+      const isConnError = errorMessage.includes('NS_ERROR_CONNECTION_REFUSED') ||
+                          errorMessage.includes('Failed to fetch') ||
+                          errorMessage.includes('NetworkError') ||
+                          errorMessage.includes('ERR_CONNECTION_REFUSED') ||
+                          errorMessage.includes('net::ERR_') ||
+                          errorMessage.includes('404');
+      
+      if (isConnError) {
+        console.log('Connection error in auto-translation queue, stopping');
+        updateProcessIndicator('Backend connection failed. Check backend URL in settings.', true, false);
+        setTimeout(() => hideProcessIndicator(), 5000);
+        translationQueue.clear();
+        break;
+      } else {
+        markImageAsProcessed(img, 'error', error.message);
+        translationQueue.delete(img);
+      }
     }
   }
   
   isProcessing = false;
+  
   updateProcessIndicator(`Completed ${processedImages}/${totalImages} translations`, true, false);
   setTimeout(() => hideProcessIndicator(), 2000);
   
@@ -861,7 +883,10 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
       markImageAsProcessed(element, message.status, message.error);
     }
   } else if (message.action === 'updateProcessIndicator') {
-    updateProcessIndicator(message.text);
+    updateProcessIndicator(message.text, true, !message.autoHide);
+    if (message.autoHide && message.duration) {
+      setTimeout(() => hideProcessIndicator(), message.duration);
+    }
   } else if (message.action === 'hideProcessIndicator') {
     hideProcessIndicator();
   } else if (message.action === 'startBatchTranslation') {
@@ -869,7 +894,6 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   } else if (message.action === 'getActiveSelectorAndCheckElements') {
     try {
-      // Use existing getActiveSelectors function
       const activeSelector = getActiveSelectors();
       if (!activeSelector) {
         sendResponse({ hasElements: false });
@@ -882,7 +906,7 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
       console.error('Error checking elements:', error);
       sendResponse({ hasElements: false });
     }
-    return true; // Keep message channel open for async response
+    return true;
   }
   
   return true;
