@@ -905,16 +905,10 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
   } else if (message.action === 'getActiveSelectorAndCheckElements') {
     try {
       // Use existing getActiveSelectors function
-      console.log("bruh");
       const activeSelector = getActiveSelectors();
-      console.log("activeSelectornya");
-      console.log(!activeSelector);
       if (!activeSelector) {
-        console.log('tidak ada element');
         sendResponse({ hasElements: false });
         return;
-      }else{
-        console.log('ada element');
       }
       
       const elements = document.querySelectorAll(activeSelector);

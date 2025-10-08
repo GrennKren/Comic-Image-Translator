@@ -280,8 +280,30 @@ async function loadSettings() {
 
 async function saveSettings() {
   try {
+    let backendUrl = document.getElementById('backendUrl').value.trim();
+    
+    // Normalize backend URL
+    if (!backendUrl) {
+      showStatus('Backend URL is required', 'error');
+      return;
+    }
+    
+    // Add https:// if no protocol specified
+    if (!backendUrl.match(/^https?:\/\//i)) {
+      backendUrl = 'https://' + backendUrl;
+    }
+    
+    // Normalize using URL API to get clean origin
+    try {
+      const urlObj = new URL(backendUrl);
+      backendUrl = urlObj.origin;
+    } catch (urlError) {
+      showStatus('Invalid backend URL format', 'error');
+      return;
+    }
+    
     const settings = {
-      backendUrl: document.getElementById('backendUrl').value.trim(),
+      backendUrl: backendUrl,
       displayMode: document.getElementById('displayMode').value,
       selectorRules: (await browser.storage.local.get('settings')).settings?.selectorRules || DEFAULT_SETTINGS.selectorRules,
       autoTranslate: document.getElementById('autoTranslate').checked,
@@ -303,11 +325,6 @@ async function saveSettings() {
       showProcessIndicator: document.getElementById('showProcessIndicator').value === 'true',
       fontSizeOffset: parseInt(document.getElementById('fontSizeOffset').value)
     };
-    
-    if (!settings.backendUrl) {
-      showStatus('Backend URL is required', 'error');
-      return;
-    }
     
     await browser.storage.local.set({ settings });
     showStatus('Settings saved successfully!', 'success');
