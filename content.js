@@ -164,6 +164,10 @@ function setupFeatures() {
   if (settings.observeDynamicImages) {
     setupEnhancedImageObserver();
     setupPageChangeObserver();
+    // Trigger context menu update on DOMContentLoaded if selector match
+    document.addEventListener('DOMContentLoaded', () => {
+      triggerUpdateContextMenuIfSelectorMatch();
+    });
   }
   
   //initializeHoverButtons();
@@ -265,7 +269,7 @@ function cleanupOrphanedHoverButtons() {
 }
 
 function setupEnhancedImageObserver() {
-  console.log('Setting up enhanced image observer for webtoon support');
+  console.log('Setting up enhanced image observer');
   
   let observerTimeout = null;
   let pendingMutations = [];
@@ -303,7 +307,7 @@ function setupEnhancedImageObserver() {
               });
             }
             
-            // Special handling for lazy-loaded images in webtoon
+            // Special handling for lazy-loaded images
             const lazyImages = node.querySelectorAll('img[data-src], img[data-lazy-src], img[data-original]');
             if (lazyImages && lazyImages.length > 0) {
               lazyImages.forEach(img => {
@@ -340,40 +344,26 @@ function setupEnhancedImageObserver() {
     if (newImages.length > 0) {
       console.log('New images detected by observer:', newImages.length);
       
-      // For webtoon-style content, process images as they become available
-      const isWebtoonPage = document.querySelector('.webtoon') || 
-                           document.querySelector('[class*="webtoon"]') ||
-                           document.querySelector('[class*="comic"]') ||
-                           document.querySelector('[class*="manga"]');
+      const matchingImages = newImages.filter(img => img.matches(currentSelector));
       
-      if (isWebtoonPage && autoTranslateEnabled) {
-        // Process images immediately for webtoon
-        newImages.forEach(img => {
-          if (img.matches(currentSelector)) {
-            queueImageForTranslation(img);
-          }
+      if (matchingImages.length > 0) {
+        matchingImages.forEach(img => {
+          const elementInfo = getElementInfo(img);
+          sendMessageWithRetry({
+            action: 'applyCacheOnly',
+            imageUrl: img.src,
+            imageElement: elementInfo
+          }).catch(() => {});
         });
-      } else {
-        // Regular processing for non-webtoon content
-        const matchingImages = newImages.filter(img => img.matches(currentSelector));
         
-        if (matchingImages.length > 0) {
+        if (autoTranslateEnabled) {
           matchingImages.forEach(img => {
-            const elementInfo = getElementInfo(img);
-            sendMessageWithRetry({
-              action: 'applyCacheOnly',
-              imageUrl: img.src,
-              imageElement: elementInfo
-            }).catch(() => {});
+            queueImageForTranslation(img);
           });
-          
-          if (autoTranslateEnabled) {
-            matchingImages.forEach(img => {
-              queueImageForTranslation(img);
-            });
-          }
         }
       }
+      
+      triggerUpdateContextMenuIfSelectorMatch();
     }
   };
   
@@ -385,10 +375,10 @@ function setupEnhancedImageObserver() {
     observerTimeout = setTimeout(() => {
       observerTimeout = null;
       processMutations();
-    }, 100); // Faster response for webtoon content
+    }, 100); 
   });
   
-  // Observe more attributes for webtoon support
+  // Observe more attributes
   imageObserver.observe(document.body, {
     childList: true,
     subtree: true,
@@ -398,7 +388,21 @@ function setupEnhancedImageObserver() {
     attributeOldValue: false
   });
   
-  console.log('Enhanced image observer started with webtoon support');
+  console.log('Enhanced image observer started');
+}
+
+// Trigger updateContextMenu in background if selector match exists
+async function triggerUpdateContextMenuIfSelectorMatch() {
+  try {
+    const activeSelector = getActiveSelectors();
+    if (!activeSelector) return;
+    const elements = document.querySelectorAll(activeSelector);
+    if (elements.length > 0) {
+      await sendMessageWithRetry({ action: 'forceUpdateContextMenu' });
+    }
+  } catch (e) {
+    // ignore
+  }
 }
 
 function setupPageChangeObserver() {
@@ -601,7 +605,6 @@ async function startBatchTranslation() {
   }
 }
 
-// Update shouldProcessImage to handle webtoon-style loading
 function shouldProcessImage(img) {
   if (img.dataset.miProcessed === 'true') {
     return false;
@@ -613,23 +616,11 @@ function shouldProcessImage(img) {
     return false;
   }
   
-  // For webtoon-style content, be more lenient with size requirements
-  const isWebtoonStyle = img.closest('.webtoon') || 
-                         img.closest('[class*="webtoon"]') ||
-                         img.closest('[class*="comic"]') ||
-                         img.closest('[class*="manga"]');
   
-  if (isWebtoonStyle) {
-    // For webtoon, allow smaller images as they might be panels
-    if (img.naturalWidth > 50 && img.naturalHeight > 50) {
-      return true;
-    }
-  } else {
-    // Regular size requirements for non-webtoon content
-    if (img.naturalWidth > 0 && img.naturalHeight > 0) {
-      if (img.naturalWidth < 100 || img.naturalHeight < 100) {
-        return false;
-      }
+  // Regular size requirements
+  if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+    if (img.naturalWidth < 100 || img.naturalHeight < 100) {
+      return false;
     }
   }
   

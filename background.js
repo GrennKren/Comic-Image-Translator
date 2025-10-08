@@ -257,6 +257,12 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     handleBatchTranslationWithOOMRetry(message.imageUrls, sender.tab.id);
     return true;
   }
+
+  if (message && message.action === 'forceUpdateContextMenu') {
+    updateContextMenu();
+    sendResponse({ ok: true });
+    return true;
+  }
   
   return true;
 });
