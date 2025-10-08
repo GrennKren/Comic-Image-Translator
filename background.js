@@ -663,15 +663,34 @@ async function translateBatchImages(imageUrls, tabId) {
 async function translateImageBatch(imageUrls, config) {
   const promises = imageUrls.map(async (imageUrl) => {
     try {
+      const cacheKey = generateCacheKey(imageUrl, config);
+      if (config.enableCache) {
+        const cachedResult = await getCachedTranslation(cacheKey);
+        if (cachedResult) {
+          console.log('Using cached translation for batch item:', imageUrl);
+          return { ...cachedResult, originalUrl: imageUrl };
+        }
+      }
+
       const imageBlob = await fetchImage(imageUrl);
       
       if (config.displayMode === 'download') {
         const result = await sendToBackend(imageBlob, config);
         result.mode = 'download';
+        
+        if (config.enableCache) {
+          await cacheTranslation(cacheKey, result);
+        }
+        
         return { ...result, originalUrl: imageUrl };
       } else if (config.displayMode === 'replace') {
         const result = await sendToBackend(imageBlob, config);
         result.mode = 'replace';
+        
+        if (config.enableCache) {
+          await cacheTranslation(cacheKey, result);
+        }
+        
         return { ...result, originalUrl: imageUrl };
       } else if (config.displayMode === 'overlay') {
         try {
@@ -684,6 +703,12 @@ async function translateImageBatch(imageUrls, config) {
             if (config.overlayMode === 'cleaned') {
               const cleanedResult = await sendToBackend(imageBlob, config);
               cleanedImageUrl = cleanedResult.imageUrl;
+            }
+            
+            const result = { textRegions, cleanedImageUrl, mode: 'overlay' };
+            
+            if (config.enableCache) {
+              await cacheTranslation(cacheKey, result);
             }
             
             return { textRegions, cleanedImageUrl, mode: 'overlay', originalUrl: imageUrl };
