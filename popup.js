@@ -94,8 +94,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const configUrl = browser.runtime.getURL('configuration.html');
         const popupCheck = await isPopup();
         
-        console.log('Is popup?', popupCheck); // Debug
-        
+                
         if (popupCheck) {
           await openOrSwitchToTab(configUrl);
           window.close();

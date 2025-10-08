@@ -77,7 +77,6 @@ async function loadSettingsWithRetry(retries = 5, delay = 200) {
     try {
       const result = await browser.storage.local.get('settings');
       if (result.settings && result.settings.backendUrl) {
-        console.log('Settings loaded from storage:', result.settings);
         settings = result.settings;
         settingsLoaded = true;
         setupFeatures();
@@ -86,15 +85,13 @@ async function loadSettingsWithRetry(retries = 5, delay = 200) {
       
       const response = await sendMessageWithRetry({ action: 'getSettings' });
       if (response && response.settings) {
-        console.log('Settings loaded from background:', response.settings);
         settings = response.settings;
         settingsLoaded = true;
         setupFeatures();
         return;
       }
     } catch (error) {
-      console.log(`Attempt ${i + 1} to load settings failed:`, error.message);
-      if (i < retries - 1) {
+            if (i < retries - 1) {
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
@@ -131,11 +128,8 @@ loadSettingsWithRetry();
 // Setup all features based on current settings
 function setupFeatures() {
   if (!settingsLoaded) {
-    console.log('Settings not loaded yet, skipping setup');
-    return;
+        return;
   }
-  
-  console.log('Setting up features with settings:', settings);
   
   createProcessIndicator();
   //setupHoverDelegation();
@@ -223,8 +217,7 @@ async function preloadCacheForAllImages() {
       .filter(img => img.dataset.miProcessed !== 'true');
     
     if (imageArray.length > 0) {
-      console.log(`Found ${imageArray.length} images for cache application`);
-      
+            
       imageArray.forEach(img => {
         const elementInfo = getElementInfo(img);
         sendMessageWithRetry({
@@ -269,8 +262,7 @@ function cleanupOrphanedHoverButtons() {
 }
 
 function setupEnhancedImageObserver() {
-  console.log('Setting up enhanced image observer');
-  
+    
   let observerTimeout = null;
   let pendingMutations = [];
   
@@ -342,8 +334,7 @@ function setupEnhancedImageObserver() {
     }
     
     if (newImages.length > 0) {
-      console.log('New images detected by observer:', newImages.length);
-      
+            
       const matchingImages = newImages.filter(img => img.matches(currentSelector));
       
       if (matchingImages.length > 0) {
@@ -388,8 +379,7 @@ function setupEnhancedImageObserver() {
     attributeOldValue: false
   });
   
-  console.log('Enhanced image observer started');
-}
+  }
 
 // Trigger updateContextMenu in background if selector match exists
 async function triggerUpdateContextMenuIfSelectorMatch() {
@@ -406,16 +396,14 @@ async function triggerUpdateContextMenuIfSelectorMatch() {
 }
 
 function setupPageChangeObserver() {
-  console.log('Setting up page change observer');
-  
+    
   let lastUrl = location.href;
   
   pageChangeObserver = new MutationObserver(() => {
     const url = location.href;
     if (url !== lastUrl) {
       lastUrl = url;
-      console.log('Page URL changed:', url);
-      
+            
       cleanupOrphanedOverlays();
       cleanupOrphanedHoverButtons();
       
@@ -434,8 +422,7 @@ function setupPageChangeObserver() {
   }
   
   window.addEventListener('popstate', () => {
-    console.log('Popstate event detected');
-    cleanupOrphanedOverlays();
+        cleanupOrphanedOverlays();
     cleanupOrphanedHoverButtons();
     
     if (autoTranslateEnabled) {
@@ -444,8 +431,7 @@ function setupPageChangeObserver() {
   });
   
   window.addEventListener('pagechange', () => {
-    console.log('Page change event detected');
-    cleanupOrphanedOverlays();
+        cleanupOrphanedOverlays();
     cleanupOrphanedHoverButtons();
     
     if (autoTranslateEnabled) {
@@ -453,8 +439,7 @@ function setupPageChangeObserver() {
     }
   });
   
-  console.log('Page change observer started');
-}
+  }
 
 function setupLazyLoadingObserver(img) {
   if (img.dataset.lazyObserverSetup) return;
@@ -488,8 +473,7 @@ function setupLazyLoadingObserver(img) {
 function scanExistingImages() {
   if (!currentSelector) return;
   
-  console.log('Scanning for existing images with selector:', currentSelector);
-  translateImagesWithSelector(currentSelector);
+    translateImagesWithSelector(currentSelector);
 }
 
 function startAutoTranslation(selector = null) {
@@ -500,36 +484,31 @@ function startAutoTranslation(selector = null) {
   }
   
   if (!currentSelector) {
-    console.log('No active selector for current domain');
-    currentSelector = '';
+        currentSelector = '';
     autoTranslateEnabled = false;
     return;
   }
   
   autoTranslateEnabled = true;
   
-  console.log('Starting auto-translation with selector:', currentSelector);
-  
+    
   scanExistingImages();
 }
 
 function stopAutoTranslation() {
   autoTranslateEnabled = false;
   currentSelector = '';
-  console.log('Auto-translation stopped');
-}
+  }
 
 function translateImagesWithSelector(selector) {
   try {
     const images = document.querySelectorAll(selector);
     
     if (images.length === 0) {
-      console.log('No images found with selector:', selector);
-      return;
+            return;
     }
     
-    console.log(`Found ${images.length} images with selector: ${selector}`);
-    
+        
     images.forEach(img => {
       if (shouldProcessImage(img)) {
         queueImageForTranslation(img);
@@ -545,14 +524,12 @@ async function startBatchTranslation() {
   currentSelector = getActiveSelectors();
   
   if (!currentSelector) {
-    console.log('No active selector for current domain');
-    updateProcessIndicator('No selector configured for this site', true, false);
+        updateProcessIndicator('No selector configured for this site', true, false);
     setTimeout(() => hideProcessIndicator(), 3000);
     return;
   }
   
-  console.log('Starting batch translation with selector:', currentSelector);
-  
+    
   // Get all images matching the selector
   const images = Array.from(document.querySelectorAll(currentSelector));
   
@@ -571,8 +548,7 @@ async function startBatchTranslation() {
     return;
   }
   
-  console.log(`Found ${imagesToTranslate.length} images to translate with selector: ${currentSelector}`);
-  
+    
   // Show initial progress
   updateProcessIndicator(`Preparing to translate ${imagesToTranslate.length} images...`, true, true);
   
@@ -793,8 +769,7 @@ function hideProcessIndicator() {
 }
 
 async function translateSingleImage(img) {
-  console.log('Translating image:', img.src);
-  
+    
   img.dataset.miProcessing = 'true';
   
   const elementInfo = getElementInfo(img);
@@ -843,8 +818,7 @@ function markImageAsProcessed(img, status, errorMessage = '') {
     img.dataset.miError = errorMessage.substring(0, 100);
     console.warn(`Image marked as processed with error: ${img.src} - ${errorMessage}`);
   } else if (status === 'ok') {
-    console.log(`Image successfully processed: ${img.src}`);
-    
+        
     // Remove hover button for successfully translated images
     const hoverButtons = getHoverButtons();
     hoverButtons.forEach(btn => {
@@ -945,8 +919,7 @@ function translateSelectedImage() {
   
   if (imageUrl && imageUrl.startsWith('http')) {
     if (selectedImage.dataset.miProcessed === 'true') {
-      console.log('Skipping already processed image');
-      return;
+            return;
     }
     
     const elementInfo = getElementInfo(selectedImage);
@@ -1463,9 +1436,7 @@ function makeElementDraggable(element) {
 //}
 
 document.addEventListener('DOMContentLoaded', () => {
-  console.log('Comic Translator content script loaded');
-  console.log('Current settings:', settings);
-});
+    });
 
 //function setupHoverButtonObserver() {
 //  if (hoverButtonObserver) {
@@ -1667,7 +1638,6 @@ document.addEventListener('DOMContentLoaded', () => {
 //}
 
 function setupMobileLongPress() {
-  console.log('[MOBILE] Setting up long-press detection with batch support');
   
   document.body.addEventListener('touchstart', (e) => {
     const touch = e.touches[0];
@@ -1680,8 +1650,7 @@ function setupMobileLongPress() {
       const img = findImageAtPoint(touchStartPos.x, touchStartPos.y);
       
       if (img) {
-        console.log('[MOBILE] Long press detected on image:', img.src);
-        
+                
         if (navigator.vibrate) {
           navigator.vibrate(50);
         }
@@ -1714,15 +1683,13 @@ function showMobileTranslateOptions(img) {
   currentSelector = getActiveSelectors();
   
   if (!currentSelector) {
-    console.log('[MOBILE] No active selector, only showing single image option');
-    // Only show single image option if no selectors configured
+        // Only show single image option if no selectors configured
     showTranslatePrompt(img);
     return;
   }
   
   if (img.dataset.miProcessing === 'true') {
-    console.log('[MOBILE] Image is being processed, skipping prompt');
-    return;
+        return;
   }
   
   const existingPrompt = document.querySelector('.translate-options-mobile');
@@ -1815,8 +1782,7 @@ function findImageAtPoint(x, y) {
           displayWidth > 200 && displayHeight > 100) {
         
         if (el.dataset.miProcessed === 'true' && el.dataset.miStatus === 'ok') {
-          console.log('[MOBILE] Image already translated');
-          return null;
+                    return null;
         }
         
         return el;
@@ -1832,8 +1798,7 @@ function findImageAtPoint(x, y) {
           displayWidth > 200 && displayHeight > 100) {
         
         if (img.dataset.miProcessed === 'true' && img.dataset.miStatus === 'ok') {
-          console.log('[MOBILE] Image already translated');
-          return null;
+                    return null;
         }
         
         return img;
@@ -1847,8 +1812,7 @@ function findImageAtPoint(x, y) {
 function showTranslatePrompt(img) {
   // Check if image is already being processed
   if (img.dataset.miProcessing === 'true') {
-    console.log('[MOBILE] Image is being processed, skipping prompt');
-    return;
+        return;
   }
   
   const existingPrompt = document.querySelector('.translate-prompt-mobile');
